@@ -28,6 +28,10 @@ export interface SaveSlot {
 export default class Fb {
     private static state = "idle"; // idle | loading | ready | failed
     private static authUser: any = null;
+    // uid of the first auth event after page load; null = none seen yet.
+    // Any LATER change (login / logout / account switch) hard-reloads the
+    // page so no progress leaks between accounts.
+    private static baseUid: string = null;
 
     static slots: { [id: string]: SaveSlot } = {};
     static activeSlot = "";
@@ -88,6 +92,20 @@ export default class Fb {
                 try {
                     Fb.sdk().initializeApp(FB_CONFIG);
                     Fb.sdk().auth().onAuthStateChanged((u: any) => {
+                        const uid = u ? u.uid : "";
+                        if (Fb.baseUid !== null && uid !== Fb.baseUid) {
+                            // login / logout / account switch after page load:
+                            // wipe guest-visible progress and restart clean.
+                            // After the reload, the persisted session loads the
+                            // new account's slots (most recently updated one).
+                            if (!u) {
+                                GameData.setUnlocked(1);
+                                GameData.setBestDist(0);
+                            }
+                            (window as any).location.reload();
+                            return;
+                        }
+                        Fb.baseUid = uid;
                         Fb.authUser = u;
                         if (u) {
                             Fb.loadSlots();
@@ -151,7 +169,7 @@ export default class Fb {
     private static captureLocal(into: SaveSlot) {
         into.unlocked = GameData.getUnlocked();
         into.best = GameData.getBestDist();
-        into.t = into.t || Date.now();
+        into.t = Date.now(); // bump: "most recently updated" wins on login
     }
 
     // On login: fetch slots; migrate legacy flat saves; create the first slot
@@ -163,6 +181,7 @@ export default class Fb {
                 const v = snap.val();
                 Fb.slots = {};
                 if (v && v.slots) {
+                    let newest = "";
                     for (const id in v.slots) {
                         const s = v.slots[id];
                         Fb.slots[id] = {
@@ -171,8 +190,10 @@ export default class Fb {
                             best: s.best || 0,
                             t: s.t || 0
                         };
+                        if (!newest || Fb.slots[id].t > Fb.slots[newest].t) newest = id;
                     }
-                    Fb.activeSlot = (v.active && Fb.slots[v.active]) ? v.active : Fb.slotIds()[0];
+                    // on login, the most recently updated slot becomes active
+                    Fb.activeSlot = newest || Fb.slotIds()[0];
                     Fb.applySlotToLocal(Fb.activeSlot);
                 } else {
                     // legacy flat record or brand-new account: seed slot 1,
@@ -244,6 +265,7 @@ export default class Fb {
     static loadSlot(id: string): string {
         if (!Fb.slots[id]) return "no such slot";
         Fb.activeSlot = id;
+        Fb.slots[id].t = Date.now(); // it is now the most recently used
         Fb.applySlotToLocal(id);
         Fb.pushAll();
         return null;
