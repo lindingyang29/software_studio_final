@@ -134,12 +134,18 @@ export default class MenuCtrl extends cc.Component {
             }
         }
 
-        // settings button
-        const sBtn = this.sprite(this.node, "white", 0, -226, 200, 44, cc.color(40, 30, 70));
+        // settings + level editor buttons
+        const sBtn = this.sprite(this.node, "white", -110, -226, 200, 44, cc.color(40, 30, 70));
         this.label(sBtn, "SETTINGS", 0, 0, 20, orange);
         sBtn.on(cc.Node.EventType.TOUCH_END, () => {
             Sfx.play("click", 0.8);
             this.toggleSettings();
+        });
+        const eBtn = this.sprite(this.node, "white", 110, -226, 200, 44, cc.color(20, 60, 45));
+        this.label(eBtn, "LEVEL EDITOR", 0, 0, 20, cyan);
+        eBtn.on(cc.Node.EventType.TOUCH_END, () => {
+            Sfx.play("click", 0.8);
+            cc.director.loadScene("Editor");
         });
 
         this.hintLabel = this.label(this.node,
