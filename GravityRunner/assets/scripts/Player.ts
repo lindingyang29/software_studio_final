@@ -29,19 +29,30 @@ export default class Player extends cc.Component {
     private invincibleT = 0;
 
     private shieldNode: cc.Node = null;
+    private magnetAura: cc.Node = null;
 
-    init(mgr: GameMgr, level: LevelData, index: number, shieldFrame: cc.SpriteFrame) {
+    init(mgr: GameMgr, level: LevelData, index: number, frames: { [k: string]: cc.SpriteFrame }) {
         this.mgr = mgr;
         this.level = level;
         this.index = index;
 
         this.shieldNode = new cc.Node("shieldFx");
         const sp = this.shieldNode.addComponent(cc.Sprite);
-        sp.spriteFrame = shieldFrame;
+        sp.spriteFrame = frames["shield"];
         sp.sizeMode = cc.Sprite.SizeMode.CUSTOM;
         this.shieldNode.setContentSize(54, 54);
         this.shieldNode.active = false;
         this.node.addChild(this.shieldNode, 1);
+
+        this.magnetAura = new cc.Node("magnetFx");
+        const ms = this.magnetAura.addComponent(cc.Sprite);
+        ms.spriteFrame = frames["glow"];
+        ms.sizeMode = cc.Sprite.SizeMode.CUSTOM;
+        this.magnetAura.setContentSize(120, 120);
+        this.magnetAura.color = cc.color(255, 230, 110);
+        this.magnetAura.opacity = 150;
+        this.magnetAura.active = false;
+        this.node.addChild(this.magnetAura, -1);
 
         this.reset();
     }
@@ -58,6 +69,7 @@ export default class Player extends cc.Component {
         this.magnetT = 0;
         this.invincibleT = 0;
         this.shieldNode.active = false;
+        this.magnetAura.active = false;
         this.node.active = true;
         this.node.opacity = 255;
         this.node.scaleX = 1;
@@ -76,6 +88,7 @@ export default class Player extends cc.Component {
         this.shield = false;
         this.magnetT = 0;
         this.shieldNode.active = false;
+        this.magnetAura.active = false;
         this.node.active = true;
         this.node.opacity = 255;
         this.node.scaleX = 1;
@@ -106,7 +119,7 @@ export default class Player extends cc.Component {
             this.shield = true;
             this.shieldNode.active = true;
         } else if (type === "magnet") {
-            this.magnetT = 5;
+            this.magnetT = 6;
         } else if (type === "slow") {
             this.mgr.applySlow(4, 0.55);
         }
@@ -151,7 +164,7 @@ export default class Player extends cc.Component {
 
         // teleporters (one-way, exits are always forward so no re-trigger)
         for (const t of this.level.teleports) {
-            if (Math.abs(n.x - t.x) < 30 && Math.abs(n.y - t.y) < 30) {
+            if (Math.abs(n.x - t.x) < 40 && Math.abs(n.y - t.y) < 40) {
                 n.setPosition(t.tx, t.ty);
                 this.vy = 0;
                 this.gravityDir = t.ty >= 0 ? 1 : -1;
@@ -186,10 +199,21 @@ export default class Player extends cc.Component {
             }
         }
 
-        // crystals (magnet widens the pickup radius)
-        const reach = this.magnetT > 0 ? 130 : 36;
+        // crystals — the magnet visibly drags them toward the player
+        this.magnetAura.active = this.magnetT > 0;
         for (const c of this.level.crystals) {
-            if (!c.taken && Math.abs(n.x - c.x) < reach && Math.abs(n.y - c.y) < reach) {
+            if (c.taken) continue;
+            if (this.magnetT > 0) {
+                const ddx = c.node.x - n.x;
+                const ddy = c.node.y - n.y;
+                const d = Math.sqrt(ddx * ddx + ddy * ddy);
+                if (d > 1 && d < 230) {
+                    const m = Math.min(1, (900 * dt) / d);
+                    c.node.x -= ddx * m;
+                    c.node.y -= ddy * m;
+                }
+            }
+            if (Math.abs(c.node.x - n.x) < 38 && Math.abs(c.node.y - n.y) < 38) {
                 c.taken = true;
                 c.node.active = false;
                 this.mgr.onCrystal();

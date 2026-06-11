@@ -34,7 +34,8 @@ export default class GameMgr extends cc.Component {
     private crystalsTaken = 0;
     private slowT = 0;
     private enemyT = 0;
-    private curRotation = 0;
+    private rotCurrent = 0;
+    private rotTarget = 0;
 
     private nameLabel: cc.Label = null;
     private crystalLabel: cc.Label = null;
@@ -111,7 +112,7 @@ export default class GameMgr extends cc.Component {
             pNode.setContentSize(36, 36);
             this.world.addChild(pNode, 5);
             const p = pNode.addComponent(Player);
-            p.init(this, this.level, i, this.frames["shield"]);
+            p.init(this, this.level, i, this.frames);
             this.players.push(p);
         }
 
@@ -268,6 +269,7 @@ export default class GameMgr extends cc.Component {
         for (const c of this.level.crystals) {
             c.taken = false;
             c.node.active = true;
+            c.node.setPosition(c.x, c.y); // magnet may have dragged it around
         }
         for (const pu of this.level.powerups) {
             pu.taken = false;
@@ -290,25 +292,31 @@ export default class GameMgr extends cc.Component {
 
     // ---------- rotation zones ----------
 
-    // Visual trick: rotating the camera node makes the whole corridor appear
-    // rotated (gravity "becomes" left/right at 90deg) while physics stay 1D.
-    // BG (camera child) and HUD (angle-synced) stay screen-aligned.
     private applyRotationForX(x: number, instant: boolean) {
         let target = 0;
         for (const r of this.level.rotations) {
             if (x >= r.x) target = r.angle;
         }
-        if (target === this.curRotation && !instant) return;
-        if (target !== this.curRotation) Sfx.play("teleport", 0.4);
-        this.curRotation = target;
-        cc.Tween.stopAllByTarget(this.cameraNode);
-        if (instant) {
-            this.cameraNode.angle = -target;
-        } else {
-            cc.tween(this.cameraNode)
-                .to(0.9, { angle: -target }, { easing: "sineInOut" })
-                .start();
+        if (target !== this.rotTarget) {
+            this.rotTarget = target;
+            if (!instant) Sfx.play("teleport", 0.4);
         }
+        if (instant) {
+            this.rotCurrent = target;
+            this.applyWorldRotation();
+        }
+    }
+
+    // Rotate the WORLD node (not the camera — cc.Camera in 2.4 ignores its
+    // node's rotation) around the camera's focus point. Obstacles, players and
+    // apparent gravity all rotate on screen, while physics stay 1D because
+    // Player works in the world node's local coordinates.
+    private applyWorldRotation() {
+        const th = this.rotCurrent * Math.PI / 180;
+        const px = this.cameraNode.x; // camera y is always 0
+        this.world.angle = this.rotCurrent;
+        this.world.x = px - px * Math.cos(th);
+        this.world.y = -px * Math.sin(th);
     }
 
     // ---------- power-up support ----------
@@ -391,12 +399,20 @@ export default class GameMgr extends cc.Component {
     // ---------- per-frame ----------
 
     update(dt: number) {
-        // keep HUD glued to the camera viewport (position + rotation)
+        // keep HUD glued to the camera viewport
         if (this.hud && this.cameraNode) {
             this.hud.x = this.cameraNode.x;
             this.hud.y = this.cameraNode.y;
-            this.hud.angle = this.cameraNode.angle;
         }
+        // animate field rotation at a constant rate, and re-anchor every frame
+        // because the pivot (camera focus) keeps moving
+        if (this.rotCurrent !== this.rotTarget) {
+            const step = 110 * dt;
+            const diff = this.rotTarget - this.rotCurrent;
+            if (Math.abs(diff) <= step) this.rotCurrent = this.rotTarget;
+            else this.rotCurrent += diff > 0 ? step : -step;
+        }
+        if (this.world) this.applyWorldRotation();
         if (this.state !== "run") return;
 
         this.time += dt;
