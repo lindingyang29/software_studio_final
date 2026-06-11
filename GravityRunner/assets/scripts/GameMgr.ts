@@ -90,6 +90,20 @@ export default class GameMgr extends cc.Component {
 
         this.buildHud();
 
+        if (GameData.currentLevel === 0) {
+            // player-made level from the editor
+            let data: any = null;
+            try {
+                const raw = cc.sys.localStorage.getItem(GameData.CUSTOM_KEY);
+                data = raw ? JSON.parse(raw) : null;
+            } catch (e) { data = null; }
+            if (!data || !data.goal) {
+                this.setMsg("NO CUSTOM LEVEL SAVED", "PRESS Q FOR MENU");
+                return;
+            }
+            this.startLevel(data);
+            return;
+        }
         cc.resources.load("levels/level" + GameData.currentLevel, cc.JsonAsset, (err, asset: cc.JsonAsset) => {
             if (err) {
                 this.setMsg("LEVEL " + GameData.currentLevel + " LOAD ERROR", "");
@@ -127,7 +141,9 @@ export default class GameMgr extends cc.Component {
         this.timeScale = 1;
         this.enemyT = 0;
         this.applyRotationForX(this.level.start.x, true);
-        this.nameLabel.string = "LEVEL " + GameData.currentLevel + " — " + this.level.name
+        this.nameLabel.string = (GameData.currentLevel === 0
+            ? "CUSTOM — " + this.level.name
+            : "LEVEL " + GameData.currentLevel + " — " + this.level.name)
             + (count === 2 ? "   [2P]" : "");
         this.refreshHud();
         this.state = "ready";
@@ -215,7 +231,7 @@ export default class GameMgr extends cc.Component {
                 this.togglePause();
                 break;
             case cc.macro.KEY.q:
-                if (this.state === "paused") {
+                if (this.state === "paused" || this.state === "loading") {
                     cc.director.loadScene("Menu");
                 }
                 break;
@@ -432,19 +448,23 @@ export default class GameMgr extends cc.Component {
         this.state = "win";
         this.unscheduleAllCallbacks();
         Sfx.play("win", 0.9);
-        GameData.unlockNext(GameData.currentLevel);
-        const last = GameData.currentLevel >= GameData.MAX_LEVEL;
+        const custom = GameData.currentLevel === 0;
+        if (!custom) GameData.unlockNext(GameData.currentLevel);
+        const last = !custom && GameData.currentLevel >= GameData.MAX_LEVEL;
         this.setMsg(
             last ? "YOU ESCAPED ASTRA-9!" : "LEVEL CLEAR!",
             "CRYSTALS " + this.crystalsTaken + "/" + this.level.totalCrystals
             + "    TIME " + this.formatTime(this.time)
             + "    DEATHS " + this.deaths
-            + (last ? "    SPACE = MENU" : "    SPACE = NEXT    ESC = MENU")
+            + (custom ? "    SPACE = EDITOR    ESC = MENU"
+                : last ? "    SPACE = MENU" : "    SPACE = NEXT    ESC = MENU")
         );
     }
 
     private proceedAfterWin() {
-        if (GameData.currentLevel < GameData.MAX_LEVEL) {
+        if (GameData.currentLevel === 0) {
+            cc.director.loadScene("Editor");
+        } else if (GameData.currentLevel < GameData.MAX_LEVEL) {
             GameData.currentLevel++;
             cc.director.loadScene("Game");
         } else {

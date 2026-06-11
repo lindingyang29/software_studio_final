@@ -11,8 +11,15 @@ export interface Settings {
 export default class GameData {
     static readonly MAX_LEVEL = 5;
 
-    // Which level the Game scene should load.
+    // Which level the Game scene should load. 0 = the player-made custom
+    // level stored in localStorage under CUSTOM_KEY (see EditorCtrl).
     static currentLevel = 1;
+
+    static readonly CUSTOM_KEY = "gfr_custom_level";
+
+    static hasCustomLevel(): boolean {
+        return !!cc.sys.localStorage.getItem(GameData.CUSTOM_KEY);
+    }
 
     // 1 = solo, 2 = local co-op (P1=W, P2=UP/SPACE).
     static players = 1;
