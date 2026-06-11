@@ -44,6 +44,7 @@ export default class GameMgr extends cc.Component {
     private msgLabel: cc.Label = null;
     private subLabel: cc.Label = null;
     private slowOverlay: cc.Node = null;
+    private pausePanel: cc.Node = null;
 
     isRunning(): boolean {
         return this.state === "run";
@@ -213,10 +214,17 @@ export default class GameMgr extends cc.Component {
             case cc.macro.KEY.escape:
                 this.togglePause();
                 break;
+            case cc.macro.KEY.q:
+                if (this.state === "paused") {
+                    cc.director.loadScene("Menu");
+                }
+                break;
         }
     }
 
     private onTouch(e: cc.Event.EventTouch) {
+        // while paused, only the pause-menu buttons react to clicks
+        if (this.state === "paused") return;
         // 2P touch: left half of the screen = P1, right half = P2
         const half = cc.winSize.width / 2;
         this.onAction(e.getLocationX() < half ? 0 : 1);
@@ -247,18 +255,66 @@ export default class GameMgr extends cc.Component {
     private togglePause() {
         if (this.state === "run") {
             this.state = "paused";
-            this.setMsg("PAUSED", "SPACE = RESUME    R = RESTART");
+            this.buildPauseMenu();
         } else if (this.state === "paused") {
             this.state = "run";
+            this.closePauseMenu();
             this.setMsg("", "");
         } else if (this.state === "win") {
             cc.director.loadScene("Menu");
         }
     }
 
+    private buildPauseMenu() {
+        if (this.pausePanel) return;
+        const panel = new cc.Node("PausePanel");
+        this.hud.addChild(panel, 10);
+        this.pausePanel = panel;
+
+        const dim = new cc.Node("dim");
+        const ds = dim.addComponent(cc.Sprite);
+        ds.spriteFrame = this.frames["white"];
+        ds.sizeMode = cc.Sprite.SizeMode.CUSTOM;
+        dim.setContentSize(1400, 1400);
+        dim.color = cc.color(0, 0, 0);
+        dim.opacity = 170;
+        panel.addChild(dim);
+
+        const title = this.makeLabel(panel, 0, 130, 44, cc.color(235, 240, 255));
+        title.string = "PAUSED";
+
+        const mkBtn = (text: string, y: number, cb: () => void) => {
+            const btn = new cc.Node("btn");
+            const bs = btn.addComponent(cc.Sprite);
+            bs.spriteFrame = this.frames["white"];
+            bs.sizeMode = cc.Sprite.SizeMode.CUSTOM;
+            btn.setContentSize(260, 50);
+            btn.setPosition(0, y);
+            btn.color = cc.color(24, 34, 76);
+            panel.addChild(btn);
+            const lb = this.makeLabel(btn, 0, 0, 20, cc.color(235, 240, 255));
+            lb.string = text;
+            btn.on(cc.Node.EventType.TOUCH_END, () => {
+                Sfx.play("click", 0.8);
+                cb();
+            });
+        };
+        mkBtn("RESUME  (SPACE)", 40, () => this.togglePause());
+        mkBtn("RESTART  (R)", -30, () => this.fullRestart());
+        mkBtn("MAIN MENU  (Q)", -100, () => cc.director.loadScene("Menu"));
+    }
+
+    private closePauseMenu() {
+        if (this.pausePanel) {
+            this.pausePanel.destroy();
+            this.pausePanel = null;
+        }
+    }
+
     private fullRestart() {
         if (this.state === "loading" || this.players.length === 0) return;
         this.unscheduleAllCallbacks();
+        this.closePauseMenu();
         this.respawnAll();
         this.state = "ready";
         this.setMsg("PRESS SPACE TO RUN", "");
@@ -433,6 +489,18 @@ export default class GameMgr extends cc.Component {
             const off = Math.sin((this.enemyT + e.phase) * Math.PI * 2 / e.period) * e.range;
             if (e.axis === "x") e.node.x = e.x0 + off;
             else e.node.y = e.y0 + off;
+        }
+
+        // piston bands: pow-shaped half-wave keeps them retracted >50% of the
+        // cycle so they can be timed (or ridden while extending)
+        for (const m of this.level.movers) {
+            const s = Math.sin((this.enemyT + m.phase) * Math.PI * 2 / m.period);
+            const off = s > 0 ? m.amp * Math.pow(s, 1.2) : 0;
+            const d = m.dir * off;
+            m.rect.y = m.baseY + d;
+            for (let i = 0; i < m.nodes.length; i++) {
+                m.nodes[i].y = m.baseYs[i] + d;
+            }
         }
 
         // rotation zones track the leading living player

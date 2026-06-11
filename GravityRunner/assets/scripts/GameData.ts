@@ -9,7 +9,7 @@ export interface Settings {
 }
 
 export default class GameData {
-    static readonly MAX_LEVEL = 3;
+    static readonly MAX_LEVEL = 5;
 
     // Which level the Game scene should load.
     static currentLevel = 1;

@@ -68,6 +68,20 @@ export interface RotationRef {
     angle: number;
 }
 
+// A floor/ceiling band that pistons toward the corridor center and back.
+// The waveform (in GameMgr) keeps it retracted >50% of the cycle so it can
+// be timed; players can also ride on top of an extending piston.
+export interface MoverRef {
+    rect: RectDef;      // lives inside solids[], GameMgr moves it every frame
+    nodes: cc.Node[];   // visual band + edge
+    baseYs: number[];   // rest y per node
+    baseY: number;      // rest y of the rect
+    dir: number;        // +1 floor (extends up), -1 ceiling (extends down)
+    amp: number;
+    period: number;
+    phase: number;      // seconds
+}
+
 export interface LevelData {
     name: string;
     speed: number;
@@ -80,6 +94,7 @@ export interface LevelData {
     teleports: TeleportRef[];
     enemies: EnemyRef[];
     rotations: RotationRef[];
+    movers: MoverRef[];
     goal: RectDef;
     totalCrystals: number;
 }
@@ -137,6 +152,7 @@ export default class LevelBuilder {
         const teleports: TeleportRef[] = [];
         const enemies: EnemyRef[] = [];
         const rotations: RotationRef[] = [];
+        const movers: MoverRef[] = [];
 
         const sprite = (frame: string, x: number, y: number, w: number, h: number, color?: cc.Color, z?: number) => {
             const n = new cc.Node(frame);
@@ -240,6 +256,32 @@ export default class LevelBuilder {
             });
         }
 
+        // --- piston bands (movers) ---
+        for (const m of (data.movers || [])) {
+            const isFloor = m.side === "floor";
+            const cy = isFloor ? FLOOR_Y - THICK / 2 : CEIL_Y + THICK / 2;
+            const cx = m.x + m.w / 2;
+            const rect: RectDef = { x: cx, y: cy, w: m.w, h: THICK };
+            solids.push(rect);
+            const lite = cc.color(
+                Math.min(255, pal.platform.r + 36),
+                Math.min(255, pal.platform.g + 36),
+                Math.min(255, pal.platform.b + 60));
+            const band = sprite("white", cx, cy, m.w, THICK, lite, 1);
+            const edgeY = isFloor ? FLOOR_Y - 2 : CEIL_Y + 2;
+            const edge = sprite("white", cx, edgeY, m.w, 5, pal.goal, 2);
+            movers.push({
+                rect: rect,
+                nodes: [band, edge],
+                baseYs: [cy, edgeY],
+                baseY: cy,
+                dir: isFloor ? 1 : -1,
+                amp: m.amp || 120,
+                period: m.period || 2.4,
+                phase: m.phase || 0
+            });
+        }
+
         // --- visual rotation zones ---
         for (const r of (data.rotations || [])) {
             rotations.push({ x: r.x, angle: r.angle || 0 });
@@ -281,6 +323,7 @@ export default class LevelBuilder {
             teleports: teleports,
             enemies: enemies,
             rotations: rotations,
+            movers: movers,
             goal: goal,
             totalCrystals: crystals.length
         };

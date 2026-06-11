@@ -139,6 +139,8 @@ export default class Player extends cc.Component {
         n.y += this.vy * dt;
 
         this.grounded = false;
+        let pushUp = false;
+        let pushDown = false;
         for (const r of this.level.solids) {
             const px = (BODY_W + r.w) / 2 - Math.abs(n.x - r.x);
             if (px <= 0) continue;
@@ -151,6 +153,7 @@ export default class Player extends cc.Component {
                 n.y += dir * py;
                 this.vy = 0;
                 if (dir === -this.gravityDir) this.grounded = true;
+                if (dir > 0) pushUp = true; else pushDown = true;
             } else {
                 // horizontal resolve — running into a wall face is lethal
                 const dirx = n.x >= r.x ? 1 : -1;
@@ -160,6 +163,11 @@ export default class Player extends cc.Component {
                     if (!this.alive) return;
                 }
             }
+        }
+        // squeezed between two solids (e.g. a piston and the opposite band)
+        if (pushUp && pushDown) {
+            this.die();
+            return;
         }
 
         // teleporters (one-way, exits are always forward so no re-trigger)

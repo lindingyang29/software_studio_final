@@ -104,7 +104,8 @@ GravityRunner/assets/
 | powerups | `{x, y, type}` | type: `shield`(擋一次尖刺/敵人) / `slow`(全場慢動作4s) / `magnet`(磁吸5s) |
 | teleports | `{x, y, tx, ty}` | 單向 A→B，**tx 必須 > x+50**（否則無限循環）；ty 的正負決定出口貼哪面 |
 | enemies | `{x, y, axis, range, period, phase?}` | 巡邏無人機，sin 振盪，碰到死；放置處必須留給玩家「提早/延後翻轉」的迴避空間 |
-| rotations | `{x, angle}` | 視覺場地旋轉（90=走廊轉直、重力看起來變左右）；物理不變，純相機旋轉；不要放在強制翻轉密集區 |
+| rotations | `{x, angle}` | 視覺場地旋轉（±90=走廊轉直、重力看起來變左右）；物理不變（旋轉的是 World 節點）；不要放在強制翻轉密集區 |
+| movers | `{x, w, side, amp, period, phase}` | 活塞：地板/天花板向中央伸縮。波形縮回占週期 >50%；玩家可以站上面被抬起。**伸出時側面=牆會撞死**，所以放活塞處對面必須可通行；amp ≤ 150（保證不會夾死正常路線）；phase 單位是秒 |
 
 ### 雙人模式（已實作）
 

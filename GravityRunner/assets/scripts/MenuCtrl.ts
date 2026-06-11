@@ -106,7 +106,7 @@ export default class MenuCtrl extends cc.Component {
         this.modeButtons = [];
         for (let m = 1; m <= 2; m++) {
             const x = m === 1 ? -75 : 75;
-            const btn = this.sprite(this.node, "white", x, 118, 130, 44, cc.color(24, 34, 76));
+            const btn = this.sprite(this.node, "white", x, 126, 130, 44, cc.color(24, 34, 76));
             this.label(btn, m === 1 ? "1 PLAYER" : "2 PLAYERS", 0, 0, 18, white);
             btn.on(cc.Node.EventType.TOUCH_END, () => {
                 Sfx.play("click", 0.8);
@@ -121,10 +121,10 @@ export default class MenuCtrl extends cc.Component {
         const unlocked = GameData.getUnlocked();
         for (let i = 1; i <= GameData.MAX_LEVEL; i++) {
             const open = i <= unlocked;
-            const y = 50 - i * 72;
-            const btn = this.sprite(this.node, "white", 0, y, 260, 56, open ? cc.color(24, 34, 76) : cc.color(22, 24, 34));
-            this.sprite(this.node, "white", 0, y - 26, 260, 3, open ? cyan : dim);
-            this.label(btn, open ? "LEVEL " + i : "LEVEL " + i + "  [LOCKED]", 0, 0, 24, open ? white : dim);
+            const y = 64 - (i - 1) * 56;
+            const btn = this.sprite(this.node, "white", 0, y, 260, 48, open ? cc.color(24, 34, 76) : cc.color(22, 24, 34));
+            this.sprite(this.node, "white", 0, y - 23, 260, 3, open ? cyan : dim);
+            this.label(btn, open ? "LEVEL " + i : "LEVEL " + i + "  [LOCKED]", 0, 0, 20, open ? white : dim);
             if (open) {
                 btn.on(cc.Node.EventType.TOUCH_END, () => {
                     Sfx.play("click", 0.8);
