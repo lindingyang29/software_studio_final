@@ -1,5 +1,6 @@
 import GameData from "./GameData";
-import LevelBuilder, { LevelData } from "./LevelBuilder";
+import LevelBuilder, { LevelData, FragmentManifest } from "./LevelBuilder";
+import EndlessGen from "./EndlessGen";
 import Player from "./Player";
 import CameraFollow from "./CameraFollow";
 import Sfx from "./Sfx";
@@ -36,6 +37,13 @@ export default class GameMgr extends cc.Component {
     private enemyT = 0;
     private rotCurrent = 0;
     private rotTarget = 0;
+
+    // endless mode (GameData.currentLevel === -1)
+    private endless = false;
+    private gen: EndlessGen = null;
+    private chunks: { node: cc.Node; endX: number; m: FragmentManifest }[] = [];
+    private distPx = 0;
+    private distLabel: cc.Label = null;
 
     private nameLabel: cc.Label = null;
     private crystalLabel: cc.Label = null;
@@ -89,6 +97,11 @@ export default class GameMgr extends cc.Component {
 
         this.buildHud();
 
+        this.endless = GameData.currentLevel === -1;
+        if (this.endless) {
+            this.startEndless();
+            return;
+        }
         if (GameData.currentLevel === 0) {
             // player-made level from the editor
             let data: any = null;
@@ -115,7 +128,24 @@ export default class GameMgr extends cc.Component {
 
     private startLevel(data: any) {
         this.level = LevelBuilder.build(this.world, data, this.frames);
+        this.spawnPlayersAndCamera(this.level.length - 480);
+        this.applyRotationForX(this.level.start.x, true);
+        this.nameLabel.string = (GameData.currentLevel === 0
+            ? "CUSTOM — " + this.level.name
+            : "LEVEL " + GameData.currentLevel + " — " + this.level.name)
+            + (GameData.players === 2 ? "   [2P]" : "");
+        this.refreshHud();
+        this.state = "ready";
+        this.setMsg("PRESS SPACE TO RUN", this.controlsHint());
+    }
 
+    private controlsHint(): string {
+        return GameData.players === 2
+            ? "P1: W = FLIP      P2: UP / SPACE = FLIP      R = RESTART"
+            : "SPACE / W / UP = FLIP GRAVITY    R = RESTART    ESC = PAUSE";
+    }
+
+    private spawnPlayersAndCamera(maxX: number) {
         const count = GameData.players === 2 ? 2 : 1;
         this.players = [];
         for (let i = 0; i < count; i++) {
@@ -131,7 +161,7 @@ export default class GameMgr extends cc.Component {
         }
 
         const follow = this.cameraNode.addComponent(CameraFollow);
-        follow.init(this.players[0].node, 0, this.level.length - 480);
+        follow.init(this.players[0].node, 0, maxX);
         follow.snap();
 
         this.time = 0;
@@ -139,17 +169,73 @@ export default class GameMgr extends cc.Component {
         this.crystalsTaken = 0;
         this.timeScale = 1;
         this.enemyT = 0;
+        this.distPx = 0;
+    }
+
+    // ---------- endless mode ----------
+
+    private endlessBaseSpeed(): number {
+        return 300 * GameData.settings.speed;
+    }
+
+    private startEndless() {
+        this.level = LevelBuilder.emptyLevel("ENDLESS", this.endlessBaseSpeed());
+        this.gen = new EndlessGen(1100);
+        this.chunks = [];
+        // starter pad so the run begins on safe ground
+        this.appendChunk({
+            segments: [
+                { x: -500, w: 1600, side: "floor" },
+                { x: -500, w: 1600, side: "ceiling" }
+            ],
+            crystals: [{ x: 300, y: -212 }, { x: 400, y: -212 }, { x: 500, y: -212 }]
+        }, 1100);
+        this.spawnPlayersAndCamera(1e15);
         this.applyRotationForX(this.level.start.x, true);
-        this.nameLabel.string = (GameData.currentLevel === 0
-            ? "CUSTOM — " + this.level.name
-            : "LEVEL " + GameData.currentLevel + " — " + this.level.name)
-            + (count === 2 ? "   [2P]" : "");
+        this.nameLabel.string = "ENDLESS MODE" + (GameData.players === 2 ? "   [2P]" : "");
         this.refreshHud();
         this.state = "ready";
         this.setMsg("PRESS SPACE TO RUN",
-            count === 2
-                ? "P1: W = FLIP      P2: UP / SPACE = FLIP      R = RESTART"
-                : "SPACE / W / UP = FLIP GRAVITY    R = RESTART    ESC = PAUSE");
+            this.controlsHint() + "    BEST " + GameData.getBestDist() + "m");
+    }
+
+    private appendChunk(frag: any, endX: number) {
+        const cn = new cc.Node("chunk");
+        this.world.addChild(cn);
+        const m = LevelBuilder.append(cn, frag, this.frames, this.level);
+        this.chunks.push({ node: cn, endX: endX, m: m });
+    }
+
+    private dropChunk(c: { node: cc.Node; endX: number; m: FragmentManifest }) {
+        const rm = (arr: any[], items: any[]) => {
+            for (const it of items) {
+                const i = arr.indexOf(it);
+                if (i >= 0) arr.splice(i, 1);
+            }
+        };
+        rm(this.level.solids, c.m.solids);
+        rm(this.level.spikes, c.m.spikes);
+        rm(this.level.crystals, c.m.crystals);
+        rm(this.level.powerups, c.m.powerups);
+        rm(this.level.teleports, c.m.teleports);
+        rm(this.level.enemies, c.m.enemies);
+        rm(this.level.movers, c.m.movers);
+        c.node.destroy();
+    }
+
+    private endlessGameOver() {
+        this.state = "win"; // reuses win input flow: SPACE = retry, ESC = menu
+        this.unscheduleAllCallbacks();
+        const meters = Math.floor(this.distPx / 10);
+        const best = GameData.getBestDist();
+        const newBest = meters > best;
+        if (newBest) GameData.setBestDist(meters);
+        this.setMsg(
+            newBest ? "NEW BEST!  " + meters + "m" : "RUN OVER  —  " + meters + "m",
+            "BEST " + Math.max(meters, best) + "m    CRYSTALS " + this.crystalsTaken
+            + "    TIME " + this.formatTime(this.time)
+            + "    SPACE = RETRY    ESC = MENU"
+        );
     }
 
     // ---------- HUD ----------
@@ -199,12 +285,15 @@ export default class GameMgr extends cc.Component {
         this.crystalLabel = this.makeLabel(this.hud, -450, 268, 20, white, 0);
         this.deathLabel = this.makeLabel(this.hud, -450, 240, 20, pink, 0);
         this.timeLabel = this.makeLabel(this.hud, 450, 296, 20, orange, 1);
+        this.distLabel = this.makeLabel(this.hud, 0, 296, 24, orange);
         this.msgLabel = this.makeLabel(this.hud, 0, 40, 44, white);
         this.subLabel = this.makeLabel(this.hud, 0, -10, 18, cyan);
     }
 
     private refreshHud() {
-        this.crystalLabel.string = "CRYSTALS  " + this.crystalsTaken + " / " + this.level.totalCrystals;
+        this.crystalLabel.string = this.endless
+            ? "CRYSTALS  " + this.crystalsTaken
+            : "CRYSTALS  " + this.crystalsTaken + " / " + this.level.totalCrystals;
         this.deathLabel.string = "DEATHS  " + this.deaths;
         this.timeLabel.string = this.formatTime(this.time);
     }
@@ -336,6 +425,10 @@ export default class GameMgr extends cc.Component {
 
     private fullRestart() {
         if (this.state === "loading" || this.players.length === 0) return;
+        if (this.endless) {
+            cc.director.loadScene("Game"); // streamed chunks: clean reload
+            return;
+        }
         this.unscheduleAllCallbacks();
         this.closePauseMenu();
         this.respawnAll();
@@ -434,7 +527,12 @@ export default class GameMgr extends cc.Component {
             return;
         }
 
-        // everyone is down — quick auto-retry keeps the rhythm going
+        // everyone is down
+        if (this.endless) {
+            this.endlessGameOver();
+            return;
+        }
+        // quick auto-retry keeps the rhythm going
         this.state = "dead";
         this.unscheduleAllCallbacks();
         this.scheduleOnce(() => {
@@ -469,7 +567,9 @@ export default class GameMgr extends cc.Component {
     }
 
     private proceedAfterWin() {
-        if (GameData.currentLevel === 0) {
+        if (this.endless) {
+            cc.director.loadScene("Game"); // retry a fresh run
+        } else if (GameData.currentLevel === 0) {
             cc.director.loadScene("Editor");
         } else if (GameData.currentLevel < GameData.MAX_LEVEL) {
             GameData.currentLevel++;
@@ -500,6 +600,22 @@ export default class GameMgr extends cc.Component {
 
         this.time += dt;
         this.timeLabel.string = this.formatTime(this.time);
+
+        // endless: ramp speed, track distance, stream chunks ahead / drop behind
+        if (this.endless) {
+            this.level.speed = this.endlessBaseSpeed() + Math.min(240, this.distPx / 80);
+            const lead = this.anyAlive();
+            if (lead && lead.node.x > this.distPx) this.distPx = lead.node.x;
+            this.distLabel.string = Math.floor(this.distPx / 10) + "m   BEST " + GameData.getBestDist() + "m";
+            const camX = this.cameraNode.x;
+            while (this.gen.getX() < camX + 1700) {
+                const frag = this.gen.next(this.level.speed, this.distPx);
+                this.appendChunk(frag, this.gen.getX());
+            }
+            while (this.chunks.length > 0 && this.chunks[0].endX < camX - 900) {
+                this.dropChunk(this.chunks.shift());
+            }
+        }
 
         // slow-motion timer
         if (this.slowT > 0) {

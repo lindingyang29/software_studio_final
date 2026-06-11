@@ -15,8 +15,12 @@
 //   teleports [{x, y, tx, ty}]                      one-way A->B (tx MUST be > x+50)
 //   enemies   [{x, y, axis:"x"|"y", range, period, phase?}]   patrol drones
 //   rotations [{x, angle}]                          visual field rotation from x on
+//   movers    [{x, w, side, amp, period, phase}]    piston bands
 //   goal      {x}                                   portal column
 //   speed, length, start {x, side}, name
+//
+// Endless mode uses emptyLevel() + append() to stream fragments in chunks;
+// append() returns a manifest so a chunk's data can be removed again.
 
 import GameData from "./GameData";
 
@@ -99,6 +103,17 @@ export interface LevelData {
     totalCrystals: number;
 }
 
+// What one append() call added — used by endless mode to drop old chunks.
+export interface FragmentManifest {
+    solids: RectDef[];
+    spikes: RectDef[];
+    crystals: CrystalRef[];
+    powerups: PowerupRef[];
+    teleports: TeleportRef[];
+    enemies: EnemyRef[];
+    movers: MoverRef[];
+}
+
 // Color schemes selectable in settings. Index = GameData.settings.scheme.
 export const SCHEMES = [
     {
@@ -143,16 +158,33 @@ export default class LevelBuilder {
         return SCHEMES[i >= 0 && i < SCHEMES.length ? i : 0];
     }
 
-    static build(world: cc.Node, data: any, frames: { [k: string]: cc.SpriteFrame }): LevelData {
+    static emptyLevel(name: string, speed: number): LevelData {
+        return {
+            name: name,
+            speed: speed,
+            length: 1e15,
+            start: { x: -300, y: FLOOR_Y + 18 },
+            solids: [],
+            spikes: [],
+            crystals: [],
+            powerups: [],
+            teleports: [],
+            enemies: [],
+            rotations: [],
+            movers: [],
+            goal: { x: 1e15, y: 0, w: 56, h: 2 * CEIL_Y },
+            totalCrystals: 0
+        };
+    }
+
+    // Builds the elements described by `data` into `world` and pushes their
+    // collision/data refs into `level`. Returns what was added.
+    static append(world: cc.Node, data: any, frames: { [k: string]: cc.SpriteFrame }, level: LevelData): FragmentManifest {
         const pal = LevelBuilder.scheme();
-        const solids: RectDef[] = [];
-        const spikes: RectDef[] = [];
-        const crystals: CrystalRef[] = [];
-        const powerups: PowerupRef[] = [];
-        const teleports: TeleportRef[] = [];
-        const enemies: EnemyRef[] = [];
-        const rotations: RotationRef[] = [];
-        const movers: MoverRef[] = [];
+        const m: FragmentManifest = {
+            solids: [], spikes: [], crystals: [], powerups: [],
+            teleports: [], enemies: [], movers: []
+        };
 
         const sprite = (frame: string, x: number, y: number, w: number, h: number, color?: cc.Color, z?: number) => {
             const n = new cc.Node(frame);
@@ -184,7 +216,9 @@ export default class LevelBuilder {
             const isFloor = seg.side === "floor";
             const cy = isFloor ? FLOOR_Y - THICK / 2 : CEIL_Y + THICK / 2;
             const cx = seg.x + seg.w / 2;
-            solids.push({ x: cx, y: cy, w: seg.w, h: THICK });
+            const rect = { x: cx, y: cy, w: seg.w, h: THICK };
+            level.solids.push(rect);
+            m.solids.push(rect);
             sprite("white", cx, cy, seg.w, THICK, pal.platform);
             const edgeY = isFloor ? FLOOR_Y - 2 : CEIL_Y + 2;
             sprite("white", cx, edgeY, seg.w, 4, isFloor ? pal.floorEdge : pal.ceilEdge, 1);
@@ -192,7 +226,9 @@ export default class LevelBuilder {
 
         // --- free-floating platforms ---
         for (const p of (data.platforms || [])) {
-            solids.push({ x: p.x, y: p.y, w: p.w, h: p.h });
+            const rect = { x: p.x, y: p.y, w: p.w, h: p.h };
+            level.solids.push(rect);
+            m.solids.push(rect);
             sprite("white", p.x, p.y, p.w, p.h, pal.platform);
             sprite("white", p.x, p.y + p.h / 2 - 2, p.w, 4, pal.floorEdge, 1);
             sprite("white", p.x, p.y - p.h / 2 + 2, p.w, 4, pal.ceilEdge, 1);
@@ -204,7 +240,9 @@ export default class LevelBuilder {
             const baseY = onFloor ? FLOOR_Y : CEIL_Y;
             const n = sprite("spike", s.x, baseY + (onFloor ? 19 : -19), 48, 40, undefined, 2);
             if (!onFloor) n.scaleY = -1;
-            spikes.push({ x: s.x, y: baseY + (onFloor ? 13 : -13), w: 22, h: 24 });
+            const rect = { x: s.x, y: baseY + (onFloor ? 13 : -13), w: 22, h: 24 };
+            level.spikes.push(rect);
+            m.spikes.push(rect);
         }
 
         // --- crystals ---
@@ -212,7 +250,10 @@ export default class LevelBuilder {
             const n = sprite("crystal", c.x, c.y, 28, 28, pal.crystal, 2);
             addGlow(n, 64, pal.crystal, 120);
             cc.tween(n).by(2.4, { angle: 360 }).repeatForever().start();
-            crystals.push({ x: c.x, y: c.y, taken: false, node: n });
+            const ref = { x: c.x, y: c.y, taken: false, node: n };
+            level.crystals.push(ref);
+            m.crystals.push(ref);
+            level.totalCrystals++;
         }
 
         // --- powerups ---
@@ -225,7 +266,9 @@ export default class LevelBuilder {
                 .to(0.8, { y: p.y - 8 }, { easing: "sineInOut" })
                 .repeatForever()
                 .start();
-            powerups.push({ x: p.x, y: p.y, type: p.type, taken: false, node: n });
+            const ref = { x: p.x, y: p.y, type: p.type, taken: false, node: n };
+            level.powerups.push(ref);
+            m.powerups.push(ref);
         }
 
         // --- teleports (one-way entry -> exit) ---
@@ -237,7 +280,9 @@ export default class LevelBuilder {
             exit.opacity = 170;
             addGlow(exit, 70, cc.color(120, 255, 210), 100);
             cc.tween(exit).by(2.2, { angle: 360 }).repeatForever().start();
-            teleports.push({ x: t.x, y: t.y, tx: t.tx, ty: t.ty });
+            const ref = { x: t.x, y: t.y, tx: t.tx, ty: t.ty };
+            level.teleports.push(ref);
+            m.teleports.push(ref);
         }
 
         // --- patrol drones ---
@@ -245,7 +290,7 @@ export default class LevelBuilder {
             const n = sprite("drone", e.x, e.y, 36, 36, undefined, 3);
             addGlow(n, 70, cc.color(255, 90, 90), 130);
             cc.tween(n).by(1.2, { angle: 360 }).repeatForever().start();
-            enemies.push({
+            const ref = {
                 node: n,
                 x0: e.x,
                 y0: e.y,
@@ -253,50 +298,79 @@ export default class LevelBuilder {
                 range: e.range || 120,
                 period: e.period || 2,
                 phase: e.phase || 0
-            });
+            };
+            level.enemies.push(ref);
+            m.enemies.push(ref);
         }
 
         // --- piston bands (movers) ---
-        for (const m of (data.movers || [])) {
-            const isFloor = m.side === "floor";
+        for (const mv of (data.movers || [])) {
+            const isFloor = mv.side === "floor";
             const cy = isFloor ? FLOOR_Y - THICK / 2 : CEIL_Y + THICK / 2;
-            const cx = m.x + m.w / 2;
-            const rect: RectDef = { x: cx, y: cy, w: m.w, h: THICK };
-            solids.push(rect);
+            const cx = mv.x + mv.w / 2;
+            const rect: RectDef = { x: cx, y: cy, w: mv.w, h: THICK };
+            level.solids.push(rect);
+            m.solids.push(rect);
             const lite = cc.color(
                 Math.min(255, pal.platform.r + 36),
                 Math.min(255, pal.platform.g + 36),
                 Math.min(255, pal.platform.b + 60));
-            const band = sprite("white", cx, cy, m.w, THICK, lite, 1);
+            const band = sprite("white", cx, cy, mv.w, THICK, lite, 1);
             const edgeY = isFloor ? FLOOR_Y - 2 : CEIL_Y + 2;
-            const edge = sprite("white", cx, edgeY, m.w, 5, pal.goal, 2);
-            movers.push({
+            const edge = sprite("white", cx, edgeY, mv.w, 5, pal.goal, 2);
+            const ref: MoverRef = {
                 rect: rect,
                 nodes: [band, edge],
                 baseYs: [cy, edgeY],
                 baseY: cy,
                 dir: isFloor ? 1 : -1,
-                amp: m.amp || 120,
-                period: m.period || 2.4,
-                phase: m.phase || 0
-            });
+                amp: mv.amp || 120,
+                period: mv.period || 2.4,
+                phase: mv.phase || 0
+            };
+            level.movers.push(ref);
+            m.movers.push(ref);
         }
 
-        // --- visual rotation zones ---
+        // --- visual rotation zones (data only + marker; no cleanup needed) ---
         for (const r of (data.rotations || [])) {
-            rotations.push({ x: r.x, angle: r.angle || 0 });
-            // subtle marker so players see something changed here
+            level.rotations.push({ x: r.x, angle: r.angle || 0 });
             const marker = sprite("white", r.x, 0, 6, 2 * CEIL_Y, pal.goal, 0);
             marker.opacity = 40;
         }
-        rotations.sort((a, b) => a.x - b.x);
+
+        return m;
+    }
+
+    static build(world: cc.Node, data: any, frames: { [k: string]: cc.SpriteFrame }): LevelData {
+        const pal = LevelBuilder.scheme();
+        const level = LevelBuilder.emptyLevel(data.name || "LEVEL", (data.speed || 300) * GameData.settings.speed);
+
+        LevelBuilder.append(world, data, frames, level);
+        level.rotations.sort((a, b) => a.x - b.x);
+        level.length = data.length;
 
         // --- goal portal: a glowing column spanning the corridor ---
         const goalX = data.goal.x;
-        const goal: RectDef = { x: goalX, y: 0, w: 56, h: 2 * CEIL_Y };
-        const beam = sprite("white", goalX, 0, 24, 2 * CEIL_Y, pal.goal, 1);
+        level.goal = { x: goalX, y: 0, w: 56, h: 2 * CEIL_Y };
+        const beam = new cc.Node("beam");
+        const bs = beam.addComponent(cc.Sprite);
+        bs.spriteFrame = frames["white"];
+        bs.sizeMode = cc.Sprite.SizeMode.CUSTOM;
+        beam.setContentSize(24, 2 * CEIL_Y);
+        beam.setPosition(goalX, 0);
+        beam.color = pal.goal;
         beam.opacity = 90;
-        const ring = sprite("portal", goalX, 0, 96, 160, undefined, 2);
+        beam.zIndex = 1;
+        world.addChild(beam);
+        const ring = new cc.Node("portal");
+        const rs = ring.addComponent(cc.Sprite);
+        rs.spriteFrame = frames["portal"];
+        rs.sizeMode = cc.Sprite.SizeMode.CUSTOM;
+        ring.setContentSize(96, 160);
+        ring.setPosition(goalX, 0);
+        ring.zIndex = 2;
+        world.addChild(ring);
         cc.tween(ring)
             .to(0.8, { scale: 1.12 })
             .to(0.8, { scale: 1.0 })
@@ -309,23 +383,10 @@ export default class LevelBuilder {
             .start();
 
         const startSide = (data.start && data.start.side) === "ceiling" ? 1 : -1;
-        const startY = startSide === -1 ? FLOOR_Y + 18 : CEIL_Y - 18;
-
-        return {
-            name: data.name || "LEVEL",
-            speed: (data.speed || 300) * GameData.settings.speed,
-            length: data.length,
-            start: { x: (data.start && data.start.x) || 0, y: startY },
-            solids: solids,
-            spikes: spikes,
-            crystals: crystals,
-            powerups: powerups,
-            teleports: teleports,
-            enemies: enemies,
-            rotations: rotations,
-            movers: movers,
-            goal: goal,
-            totalCrystals: crystals.length
+        level.start = {
+            x: (data.start && data.start.x) || 0,
+            y: startSide === -1 ? FLOOR_Y + 18 : CEIL_Y - 18
         };
+        return level;
     }
 }
