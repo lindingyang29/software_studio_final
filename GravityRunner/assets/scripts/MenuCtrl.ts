@@ -21,6 +21,8 @@ export default class MenuCtrl extends cc.Component {
     private boardPanel: cc.Node = null;
     private savesPanel: cc.Node = null;
     private helpPanel: cc.Node = null;
+    private uiSig = "";          // progress snapshot the UI was built from
+    private suppressFade = false;
     private accountLabel: cc.Node = null;
     private accountStatus: cc.Node = null;
 
@@ -28,7 +30,16 @@ export default class MenuCtrl extends cc.Component {
         Sfx.preload();
         Sfx.playBgm("bgm_menu");
         Fb.init();
-        Fb.onChanged = () => this.refreshAccount();
+        // When cloud slot data arrives after the scene was built (e.g. right
+        // after the post-login reload), the level locks / best distance shown
+        // are stale — rebuild the UI instead of just refreshing the label.
+        Fb.onChanged = () => {
+            if (this.uiSig && this.uiSig !== this.progressSig()) {
+                this.rebuildUi();
+            } else {
+                this.refreshAccount();
+            }
+        };
         cc.resources.loadDir("textures", cc.SpriteFrame, (err, assets: cc.SpriteFrame[]) => {
             if (err) {
                 cc.error("texture load failed", err);
@@ -71,6 +82,30 @@ export default class MenuCtrl extends cc.Component {
         return n;
     }
 
+    private progressSig(): string {
+        return GameData.getUnlocked() + "|" + GameData.getBestDist() + "|" + Fb.activeSlot;
+    }
+
+    private rebuildUi() {
+        const cam = this.node.getChildByName("Main Camera");
+        const doomed: cc.Node[] = [];
+        for (const c of this.node.children) {
+            if (c !== cam) doomed.push(c);
+        }
+        for (const d of doomed) d.destroy();
+        this.modeButtons = [];
+        this.settingsPanel = null;
+        this.accountPanel = null;
+        this.boardPanel = null;
+        this.savesPanel = null;
+        this.helpPanel = null;
+        this.accountLabel = null;
+        this.accountStatus = null;
+        this.suppressFade = true; // no black flash on an in-place rebuild
+        this.buildUi();
+        this.suppressFade = false;
+    }
+
     private applyBgTint() {
         if (!this.bgNode) return;
         const b = GameData.settings.brightness;
@@ -87,7 +122,7 @@ export default class MenuCtrl extends cc.Component {
         Fx.setFrame(this.frames["white"]);
         this.bgNode = this.sprite(this.node, "bg", 0, 0, 970, 650);
         this.applyBgTint();
-        Fx.fadeIn(this.node);
+        if (!this.suppressFade) Fx.fadeIn(this.node);
 
         // title (with a short opening animation: pop in + pulse)
         const title = this.label(this.node, "GRAVITY FLIP RUNNER", 0, 230, 56, cyan);
@@ -219,6 +254,8 @@ export default class MenuCtrl extends cc.Component {
         this.hintLabel = this.label(this.node,
             "SPACE / W / UP : FLIP      R : RESTART      ESC : PAUSE      [SPACE = QUICK START]",
             0, -308, 15, dim);
+
+        this.uiSig = this.progressSig();
     }
 
     private refreshModeButtons() {
