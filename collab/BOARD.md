@@ -7,6 +7,15 @@
 
 （無）
 
+## Backlog — 組員（人類）
+
+- [ ] **H1. Firebase Console 設定**（13% 的開關，程式都寫好了，只差 console 三步）：
+      專案 gravity-runner-2e4da → (1) Authentication 啟用 Email/Password；
+      (2) Realtime Database 建立 + 貼上 FbConfig.ts 註解裡的規則 JSON；
+      (3) Authentication → Settings → Authorized domains 加 `lindingyang29.github.io`。
+      若 RTDB 網址不是 `gravity-runner-2e4da-default-rtdb.firebaseio.com`，
+      改 FbConfig.ts 的 databaseURL。
+
 ## Backlog — Codex
 
 - [ ] **C1. CC0 BGM**：找一首 CC0/免署名的 synthwave 風 BGM（如 Kenney audio、OpenGameArt、

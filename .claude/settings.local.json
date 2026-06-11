@@ -13,7 +13,9 @@
       "WebFetch(domain:lava-summer-130.notion.site)",
       "PowerShell(node \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\tools\\\\fetch-notion.js\")",
       "PowerShell(node \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\tools\\\\fetch-notion2.js\")",
-      "PowerShell($paths = @\\(\"C:\\\\CocosDashboard\",\"C:\\\\Program Files\\\\CocosDashboard\",\"C:\\\\ProgramData\\\\cocos\",\"$env:LOCALAPPDATA\\\\Programs\",\"C:\\\\CocosCreator\",\"D:\\\\CocosDashboard\"\\); foreach \\($p in $paths\\) { if \\(Test-Path $p\\) { Get-ChildItem $p -Recurse -Filter \"CocosCreator.exe\" -ErrorAction SilentlyContinue -Depth 3 | Select-Object -First 5 FullName } }; Get-ChildItem \"C:\\\\\" -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match \"cocos\" -or $_.Name -match \"Creator\" } | Select-Object FullName)"
+      "PowerShell($paths = @\\(\"C:\\\\CocosDashboard\",\"C:\\\\Program Files\\\\CocosDashboard\",\"C:\\\\ProgramData\\\\cocos\",\"$env:LOCALAPPDATA\\\\Programs\",\"C:\\\\CocosCreator\",\"D:\\\\CocosDashboard\"\\); foreach \\($p in $paths\\) { if \\(Test-Path $p\\) { Get-ChildItem $p -Recurse -Filter \"CocosCreator.exe\" -ErrorAction SilentlyContinue -Depth 3 | Select-Object -First 5 FullName } }; Get-ChildItem \"C:\\\\\" -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match \"cocos\" -or $_.Name -match \"Creator\" } | Select-Object FullName)",
+      "PowerShell(Out-Null *)",
+      "PowerShell(Set-Content *)"
     ]
   }
 }
