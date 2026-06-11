@@ -25,6 +25,7 @@ export default class EditorCtrl extends cc.Component {
     private toolButtons: { [t: string]: cc.Node } = {};
     private toolLabel: cc.Label = null;
     private hintLabel: cc.Label = null;
+    private posLabel: cc.Label = null;
     private dragStart: { x: number; y: number } = null;
     private previewNode: cc.Node = null;
     private pendingTeleport: { x: number; y: number } = null;
@@ -60,13 +61,23 @@ export default class EditorCtrl extends cc.Component {
         this.node.addChild(this.ui, 100);
 
         this.loadData();
+
+        // Touch hit-testing goes through the camera in Cocos 2.x: a static
+        // full-screen node stops receiving touches once the camera scrolls
+        // away from it. So the click catcher lives inside `ui`, which is
+        // re-glued to the camera every frame.
+        const catcher = new cc.Node("inputCatcher");
+        catcher.setContentSize(1700, 900);
+        catcher.on(cc.Node.EventType.TOUCH_START, this.onTouchStart, this);
+        catcher.on(cc.Node.EventType.TOUCH_MOVE, this.onTouchMove, this);
+        catcher.on(cc.Node.EventType.TOUCH_END, this.onTouchEnd, this);
+        catcher.on(cc.Node.EventType.TOUCH_CANCEL, this.onTouchEnd, this);
+        catcher.on(cc.Node.EventType.MOUSE_WHEEL, this.onWheel, this);
+        this.ui.addChild(catcher, -1);
+
         this.buildToolbar();
         this.rebuild();
 
-        this.node.on(cc.Node.EventType.TOUCH_START, this.onTouchStart, this);
-        this.node.on(cc.Node.EventType.TOUCH_MOVE, this.onTouchMove, this);
-        this.node.on(cc.Node.EventType.TOUCH_END, this.onTouchEnd, this);
-        this.node.on(cc.Node.EventType.MOUSE_WHEEL, this.onWheel, this);
         cc.systemEvent.on(cc.SystemEvent.EventType.KEY_DOWN, this.onKeyDown, this);
         this.cameraNode.x = 0;
     }
@@ -267,12 +278,20 @@ export default class EditorCtrl extends cc.Component {
         this.ui.addChild(tn);
 
         const hn = new cc.Node("hint");
-        hn.setPosition(0, -320 + 22);
+        hn.setPosition(-120, -320 + 22);
         hn.color = cc.color(180, 190, 220);
         this.hintLabel = hn.addComponent(cc.Label);
         this.hintLabel.fontSize = 14;
         this.hintLabel.lineHeight = 16;
         this.ui.addChild(hn);
+
+        const pn = new cc.Node("pos");
+        pn.setPosition(330, -320 + 22);
+        pn.color = cc.color(255, 181, 74);
+        this.posLabel = pn.addComponent(cc.Label);
+        this.posLabel.fontSize = 14;
+        this.posLabel.lineHeight = 16;
+        this.ui.addChild(pn);
 
         this.refreshToolbar();
     }
@@ -496,7 +515,7 @@ export default class EditorCtrl extends cc.Component {
     }
 
     private scrollCamera(dx: number) {
-        const maxX = Math.max(this.data.goal.x + 800, 4000);
+        const maxX = Math.max(this.data.goal.x + 2000, 5000);
         this.cameraNode.x = Math.max(0, Math.min(maxX, this.cameraNode.x + dx));
     }
 
@@ -509,6 +528,13 @@ export default class EditorCtrl extends cc.Component {
         if (this.hintTimer > 0) {
             this.hintTimer -= dt;
             if (this.hintTimer <= 0) this.hintLabel.string = this.toolHint();
+        }
+        if (this.posLabel && this.data) {
+            let maxX = this.data.goal.x;
+            for (const s of this.data.segments) maxX = Math.max(maxX, s.x + s.w);
+            this.posLabel.string = "VIEW " + Math.round(this.cameraNode.x)
+                + "   GOAL " + this.data.goal.x
+                + "   LENGTH " + Math.max(this.data.goal.x + 400, maxX);
         }
     }
 }

@@ -58,6 +58,11 @@ GravityRunner/assets/
 - TypeScript 寫法保守（target ES5）：不用 optional chaining `?.`、nullish `??`、`#private`
 - 元件繼承 `cc.Component`，`export default class X extends cc.Component`
 - 場景內動畫用 `cc.tween(node)`，不要用舊版 `cc.moveTo` action
+- **觸控判定會經過攝影機換算**：掛在「不動的節點」（如 Canvas）上的 touch listener，
+  攝影機捲走後就收不到事件。要全螢幕接收點擊，必須掛在跟著攝影機移動的節點上
+  （見 GameMgr 的 touchCatcher / EditorCtrl 的 inputCatcher 模式）
+- **cc.Camera 會忽略 camera node 自身的 rotation**：要旋轉畫面請旋轉 World 節點
+  （見 GameMgr.applyWorldRotation）
 
 ## 檔案規則（避免互相踩踏）
 

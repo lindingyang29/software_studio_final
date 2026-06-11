@@ -56,7 +56,6 @@ export default class GameMgr extends cc.Component {
         this.cameraNode = this.node.getChildByName("Main Camera");
 
         cc.systemEvent.on(cc.SystemEvent.EventType.KEY_DOWN, this.onKeyDown, this);
-        this.node.on(cc.Node.EventType.TOUCH_START, this.onTouch, this);
 
         cc.resources.loadDir("textures", cc.SpriteFrame, (err, assets: cc.SpriteFrame[]) => {
             if (err) {
@@ -173,6 +172,14 @@ export default class GameMgr extends cc.Component {
         // (position AND angle, so it stays upright in rotation zones).
         this.hud = new cc.Node("HUD");
         this.node.addChild(this.hud, 100);
+
+        // Touch hit-testing goes through the camera in Cocos 2.x: a listener
+        // on the static Canvas stops firing once the camera scrolls right.
+        // The catcher rides inside the HUD, which follows the camera.
+        const catcher = new cc.Node("touchCatcher");
+        catcher.setContentSize(1700, 900);
+        catcher.on(cc.Node.EventType.TOUCH_START, this.onTouch, this);
+        this.hud.addChild(catcher, -2);
 
         const cyan = cc.color(127, 247, 255);
         const pink = cc.color(255, 122, 200);
