@@ -21,7 +21,11 @@
       "PowerShell(firebase login:list *)",
       "Bash(curl -s -o /dev/null -w \"web.app: HTTP %{http_code}\\\\n\" https://gravity-runner-2e4da.web.app/)",
       "Bash(curl -s https://gravity-runner-2e4da.web.app/)",
-      "PowerShell(node \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\tools\\\\gen-bgm.js\")"
+      "PowerShell(node \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\tools\\\\gen-bgm.js\")",
+      "PowerShell($f = \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\GravityRunner\\\\assets\\\\scripts\\\\MenuCtrl.ts\"; \\(Get-Content $f | Select-String -Pattern \"<<<<<<<|=======|>>>>>>>\" | ForEach-Object { \"$\\($_.LineNumber\\): $\\($_.Line\\)\" }\\))",
+      "PowerShell($f = \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\GravityRunner\\\\assets\\\\scripts\\\\GameMgr.ts\"; \\(Get-Content $f | Select-String -Pattern \"<<<<<<<|^=======|>>>>>>>\" | ForEach-Object { \"$\\($_.LineNumber\\): $\\($_.Line\\)\" }\\))",
+      "PowerShell(git add *)",
+      "PowerShell(Set-Location \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\"; Select-String -Path GravityRunner\\\\assets\\\\scripts\\\\GameMgr.ts -Pattern \"onKeyDown|rhythmJump|rhythmFlip|jumpKeys|flipKeys|keyToName|isRhythmLevel\\\\\\(\\\\\\)\" | ForEach-Object { \"$\\($_.LineNumber\\): $\\($_.Line.Trim\\(\\)\\)\" } | Select-Object -First 30)"
     ]
   }
 }

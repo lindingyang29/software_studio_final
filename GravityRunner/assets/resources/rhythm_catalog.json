@@ -1,0 +1,192 @@
+{
+  "songs": [
+    {
+      "id": "crossing_field",
+      "title": "crossing field",
+      "difficulties": [
+        {
+          "name": "EASY",
+          "path": "levels/rhythm/crossing_field_easy"
+        },
+        {
+          "name": "NORMAL",
+          "path": "levels/rhythm/crossing_field_normal"
+        },
+        {
+          "name": "HARD",
+          "path": "levels/rhythm/crossing_field_hard"
+        },
+        {
+          "name": "ONI",
+          "path": "levels/rhythm/crossing_field_oni"
+        }
+      ]
+    },
+    {
+      "id": "Sweetest_Bitterness",
+      "title": "Sweetest Bitterness",
+      "difficulties": [
+        {
+          "name": "EASY",
+          "path": "levels/rhythm/Sweetest_Bitterness_easy"
+        },
+        {
+          "name": "NORMAL",
+          "path": "levels/rhythm/Sweetest_Bitterness_normal"
+        },
+        {
+          "name": "HARD",
+          "path": "levels/rhythm/Sweetest_Bitterness_hard"
+        },
+        {
+          "name": "ONI",
+          "path": "levels/rhythm/Sweetest_Bitterness_oni"
+        },
+        {
+          "name": "EDIT",
+          "path": "levels/rhythm/Sweetest_Bitterness_edit"
+        }
+      ]
+    },
+    {
+      "id": "夏祭り",
+      "title": "夏祭り",
+      "difficulties": [
+        {
+          "name": "EASY",
+          "path": "levels/rhythm/夏祭り_easy"
+        },
+        {
+          "name": "NORMAL",
+          "path": "levels/rhythm/夏祭り_normal"
+        },
+        {
+          "name": "HARD",
+          "path": "levels/rhythm/夏祭り_hard"
+        },
+        {
+          "name": "ONI",
+          "path": "levels/rhythm/夏祭り_oni"
+        }
+      ]
+    },
+    {
+      "id": "千本桜",
+      "title": "千本桜",
+      "difficulties": [
+        {
+          "name": "EASY",
+          "path": "levels/rhythm/千本桜_easy"
+        },
+        {
+          "name": "NORMAL",
+          "path": "levels/rhythm/千本桜_normal"
+        },
+        {
+          "name": "HARD",
+          "path": "levels/rhythm/千本桜_hard"
+        },
+        {
+          "name": "ONI",
+          "path": "levels/rhythm/千本桜_oni"
+        },
+        {
+          "name": "EDIT",
+          "path": "levels/rhythm/千本桜_edit"
+        }
+      ]
+    },
+    {
+      "id": "幽玄ノ乱",
+      "title": "幽玄ノ乱",
+      "difficulties": [
+        {
+          "name": "EASY",
+          "path": "levels/rhythm/幽玄ノ乱_easy"
+        },
+        {
+          "name": "NORMAL",
+          "path": "levels/rhythm/幽玄ノ乱_normal"
+        },
+        {
+          "name": "HARD",
+          "path": "levels/rhythm/幽玄ノ乱_hard"
+        },
+        {
+          "name": "ONI",
+          "path": "levels/rhythm/幽玄ノ乱_oni"
+        }
+      ]
+    },
+    {
+      "id": "恋せよ乙女!",
+      "title": "恋せよ乙女！",
+      "difficulties": [
+        {
+          "name": "EASY",
+          "path": "levels/rhythm/恋せよ乙女!_easy"
+        },
+        {
+          "name": "NORMAL",
+          "path": "levels/rhythm/恋せよ乙女!_normal"
+        },
+        {
+          "name": "HARD",
+          "path": "levels/rhythm/恋せよ乙女!_hard"
+        },
+        {
+          "name": "ONI",
+          "path": "levels/rhythm/恋せよ乙女!_oni"
+        },
+        {
+          "name": "EDIT",
+          "path": "levels/rhythm/恋せよ乙女!_edit"
+        }
+      ]
+    },
+    {
+      "id": "恋ひ恋ふ縁",
+      "title": "恋ひ恋ふ縁",
+      "difficulties": [
+        {
+          "name": "EASY",
+          "path": "levels/rhythm/恋ひ恋ふ縁_easy"
+        },
+        {
+          "name": "NORMAL",
+          "path": "levels/rhythm/恋ひ恋ふ縁_normal"
+        },
+        {
+          "name": "HARD",
+          "path": "levels/rhythm/恋ひ恋ふ縁_hard"
+        },
+        {
+          "name": "ONI",
+          "path": "levels/rhythm/恋ひ恋ふ縁_oni"
+        }
+      ]
+    },
+    {
+      "id": "檄!帝国華撃団",
+      "title": "檄!帝国華撃団",
+      "difficulties": [
+        {
+          "name": "EASY",
+          "path": "levels/rhythm/檄!帝国華撃団_easy"
+        },
+        {
+          "name": "NORMAL",
+          "path": "levels/rhythm/檄!帝国華撃団_normal"
+        },
+        {
+          "name": "HARD",
+          "path": "levels/rhythm/檄!帝国華撃団_hard"
+        },
+        {
+          "name": "ONI",
+          "path": "levels/rhythm/檄!帝国華撃団_oni"
+        }
+      ]
+    }
+  ]
+}
