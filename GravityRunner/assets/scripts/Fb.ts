@@ -1,7 +1,14 @@
-// Firebase glue: email/password auth, per-account cloud save, leaderboard.
+// Firebase glue: email/password auth, per-account save SLOTS (max 8, each
+// independently named, holding unlocked levels + endless best), and a
+// leaderboard whose entries display as "account:slotname".
 // Loads the v8 (compat) SDK from CDN at runtime, so nothing is bundled.
 // Everything degrades gracefully: if FbConfig is empty, the SDK fails to
 // load, or the user is logged out, the game keeps using localStorage only.
+//
+// RTDB layout:
+//   saves/{uid}/slots/{slotId} = { name, unlocked, best, t }
+//   saves/{uid}/active         = slotId
+//   leaderboard/{uid}/{slotId} = { n: "account:slotname", best, t }
 
 import FB_CONFIG from "./FbConfig";
 import GameData from "./GameData";
@@ -9,9 +16,21 @@ import GameData from "./GameData";
 const SDK_BASE = "https://www.gstatic.com/firebasejs/8.10.1/";
 const SDK_FILES = ["firebase-app.js", "firebase-auth.js", "firebase-database.js"];
 
+export const MAX_SLOTS = 8;
+
+export interface SaveSlot {
+    name: string;
+    unlocked: number;
+    best: number;
+    t: number;
+}
+
 export default class Fb {
     private static state = "idle"; // idle | loading | ready | failed
     private static authUser: any = null;
+
+    static slots: { [id: string]: SaveSlot } = {};
+    static activeSlot = "";
 
     // Single UI callback (the menu re-registers itself each time it loads).
     static onChanged: () => void = null;
@@ -33,6 +52,18 @@ export default class Fb {
         const e = Fb.authUser.email || "";
         const at = e.indexOf("@");
         return at > 0 ? e.substring(0, at) : e;
+    }
+
+    static activeSlotName(): string {
+        const s = Fb.slots[Fb.activeSlot];
+        return s ? s.name : "";
+    }
+
+    static slotIds(): string[] {
+        const ids: string[] = [];
+        for (const id in Fb.slots) ids.push(id);
+        ids.sort((a, b) => (Fb.slots[a].t || 0) - (Fb.slots[b].t || 0));
+        return ids;
     }
 
     private static emit() {
@@ -58,7 +89,12 @@ export default class Fb {
                     Fb.sdk().initializeApp(FB_CONFIG);
                     Fb.sdk().auth().onAuthStateChanged((u: any) => {
                         Fb.authUser = u;
-                        if (u) Fb.pullAndMerge();
+                        if (u) {
+                            Fb.loadSlots();
+                        } else {
+                            Fb.slots = {};
+                            Fb.activeSlot = "";
+                        }
                         Fb.emit();
                     });
                     Fb.state = "ready";
@@ -99,49 +135,154 @@ export default class Fb {
         return (e && e.code) ? String(e.code).replace("auth/", "").replace(/-/g, " ") : "error";
     }
 
-    // ---------- cloud save + leaderboard ----------
+    // ---------- save slots ----------
 
-    // Push local progress to the account (called after unlock / new best).
-    static syncUp() {
-        if (!Fb.ready() || !Fb.authUser) return;
-        const db = Fb.sdk().database();
-        db.ref("saves/" + Fb.authUser.uid).set({
-            unlocked: GameData.getUnlocked(),
-            best: GameData.getBestDist(),
-            t: Date.now()
-        });
-        db.ref("leaderboard/" + Fb.authUser.uid).set({
-            name: Fb.userName(),
-            best: GameData.getBestDist(),
-            t: Date.now()
-        });
+    private static newSlotId(): string {
+        return "s" + Date.now();
     }
 
-    // On login: merge cloud progress into local (keep the better of each),
-    // then push the merged result back up.
-    static pullAndMerge() {
+    private static applySlotToLocal(id: string) {
+        const s = Fb.slots[id];
+        if (!s) return;
+        GameData.setUnlocked(s.unlocked || 1);
+        GameData.setBestDist(s.best || 0);
+    }
+
+    private static captureLocal(into: SaveSlot) {
+        into.unlocked = GameData.getUnlocked();
+        into.best = GameData.getBestDist();
+        into.t = into.t || Date.now();
+    }
+
+    // On login: fetch slots; migrate legacy flat saves; create the first slot
+    // from local progress for brand-new accounts.
+    private static loadSlots() {
         if (!Fb.ready() || !Fb.authUser) return;
         Fb.sdk().database().ref("saves/" + Fb.authUser.uid).once("value")
             .then((snap: any) => {
                 const v = snap.val();
-                if (v) {
-                    if (v.unlocked > GameData.getUnlocked()) GameData.unlockNext(v.unlocked - 1);
-                    if (v.best > GameData.getBestDist()) GameData.setBestDist(v.best);
+                Fb.slots = {};
+                if (v && v.slots) {
+                    for (const id in v.slots) {
+                        const s = v.slots[id];
+                        Fb.slots[id] = {
+                            name: s.name || "SAVE",
+                            unlocked: s.unlocked || 1,
+                            best: s.best || 0,
+                            t: s.t || 0
+                        };
+                    }
+                    Fb.activeSlot = (v.active && Fb.slots[v.active]) ? v.active : Fb.slotIds()[0];
+                    Fb.applySlotToLocal(Fb.activeSlot);
+                } else {
+                    // legacy flat record or brand-new account: seed slot 1,
+                    // keeping the better of cloud/local progress
+                    const id = Fb.newSlotId();
+                    const legacyUnlocked = (v && v.unlocked) || 1;
+                    const legacyBest = (v && v.best) || 0;
+                    Fb.slots[id] = {
+                        name: "SAVE 1",
+                        unlocked: Math.max(legacyUnlocked, GameData.getUnlocked()),
+                        best: Math.max(legacyBest, GameData.getBestDist()),
+                        t: Date.now()
+                    };
+                    Fb.activeSlot = id;
+                    Fb.applySlotToLocal(id);
                 }
-                Fb.syncUp();
+                Fb.pushAll();
                 Fb.emit();
             })
             .catch(() => { /* offline: keep local */ });
     }
 
+    // Write everything (slots + active + leaderboard mirror) to the cloud.
+    private static pushAll() {
+        if (!Fb.ready() || !Fb.authUser || !Fb.activeSlot) return;
+        const db = Fb.sdk().database();
+        db.ref("saves/" + Fb.authUser.uid).set({
+            slots: Fb.slots,
+            active: Fb.activeSlot
+        });
+        const board: any = {};
+        for (const id in Fb.slots) {
+            const s = Fb.slots[id];
+            board[id] = { n: Fb.userName() + ":" + s.name, best: s.best || 0, t: s.t || 0 };
+        }
+        db.ref("leaderboard/" + Fb.authUser.uid).set(board);
+    }
+
+    // Auto-save current progress into the active slot (called after level
+    // clears and new endless bests).
+    static syncUp() {
+        if (!Fb.activeSlot || !Fb.slots[Fb.activeSlot]) return;
+        Fb.captureLocal(Fb.slots[Fb.activeSlot]);
+        Fb.pushAll();
+    }
+
+    // Create a new slot from the current progress. Returns an error string.
+    static createSlot(name: string): string {
+        if (!Fb.authUser) return "log in first";
+        if (Fb.slotIds().length >= MAX_SLOTS) return "max " + MAX_SLOTS + " slots";
+        const id = Fb.newSlotId();
+        Fb.slots[id] = { name: name || ("SAVE " + (Fb.slotIds().length + 1)), unlocked: 1, best: 0, t: Date.now() };
+        Fb.captureLocal(Fb.slots[id]);
+        Fb.activeSlot = id;
+        Fb.pushAll();
+        return null;
+    }
+
+    // Overwrite an existing slot with the current progress and make it active.
+    static overwriteSlot(id: string): string {
+        if (!Fb.slots[id]) return "no such slot";
+        Fb.captureLocal(Fb.slots[id]);
+        Fb.activeSlot = id;
+        Fb.pushAll();
+        return null;
+    }
+
+    // Switch to a slot: its progress replaces the local progress.
+    static loadSlot(id: string): string {
+        if (!Fb.slots[id]) return "no such slot";
+        Fb.activeSlot = id;
+        Fb.applySlotToLocal(id);
+        Fb.pushAll();
+        return null;
+    }
+
+    static renameSlot(id: string, name: string): string {
+        if (!Fb.slots[id]) return "no such slot";
+        if (!name) return "enter a name";
+        Fb.slots[id].name = name.substring(0, 16);
+        Fb.pushAll();
+        return null;
+    }
+
+    // ---------- leaderboard ----------
+
+    // Flattens leaderboard/{uid}/{slotId} entries (and tolerates legacy flat
+    // {name,best} records) into a sorted top-N list.
     static fetchTop(n: number, done: (rows: { name: string; best: number }[]) => void) {
         if (!Fb.ready()) return done(null);
-        Fb.sdk().database().ref("leaderboard").orderByChild("best").limitToLast(n).once("value")
+        Fb.sdk().database().ref("leaderboard").once("value")
             .then((snap: any) => {
                 const rows: { name: string; best: number }[] = [];
-                snap.forEach((ch: any) => { rows.push(ch.val()); });
+                snap.forEach((userChild: any) => {
+                    const v = userChild.val();
+                    if (!v) return;
+                    if (typeof v.best === "number") {
+                        // legacy flat record
+                        rows.push({ name: v.name || "???", best: v.best });
+                        return;
+                    }
+                    for (const slotId in v) {
+                        const e = v[slotId];
+                        if (e && typeof e.best === "number") {
+                            rows.push({ name: e.n || "???", best: e.best });
+                        }
+                    }
+                });
                 rows.sort((a, b) => (b.best || 0) - (a.best || 0));
-                done(rows);
+                done(rows.slice(0, n));
             })
             .catch(() => done(null));
     }

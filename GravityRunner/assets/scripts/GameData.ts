@@ -55,6 +55,12 @@ export default class GameData {
         }
     }
 
+    // Raw overwrite — used when switching save slots.
+    static setUnlocked(v: number) {
+        const c = Math.max(1, Math.min(Math.floor(v) || 1, GameData.MAX_LEVEL));
+        cc.sys.localStorage.setItem(GameData.KEY, String(c));
+    }
+
     private static loadSettings(): Settings {
         const def: Settings = { sfx: 1, bgm: 0.6, speed: 1, scheme: 0, brightness: 1 };
         try {

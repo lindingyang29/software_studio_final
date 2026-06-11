@@ -15,7 +15,12 @@
       "PowerShell(node \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\tools\\\\fetch-notion2.js\")",
       "PowerShell($paths = @\\(\"C:\\\\CocosDashboard\",\"C:\\\\Program Files\\\\CocosDashboard\",\"C:\\\\ProgramData\\\\cocos\",\"$env:LOCALAPPDATA\\\\Programs\",\"C:\\\\CocosCreator\",\"D:\\\\CocosDashboard\"\\); foreach \\($p in $paths\\) { if \\(Test-Path $p\\) { Get-ChildItem $p -Recurse -Filter \"CocosCreator.exe\" -ErrorAction SilentlyContinue -Depth 3 | Select-Object -First 5 FullName } }; Get-ChildItem \"C:\\\\\" -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match \"cocos\" -or $_.Name -match \"Creator\" } | Select-Object FullName)",
       "PowerShell(Out-Null *)",
-      "PowerShell(Set-Content *)"
+      "PowerShell(Set-Content *)",
+      "PowerShell(node \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\tools\\\\fetch-notion3.js\" app.notion.com e29c45482acd820f8520815555905efc)",
+      "Bash(curl -s \"https://identitytoolkit.googleapis.com/v1/projects?key=AIzaSyBJaEAZfwuTOxUlwaV71SFAU2LtBwLzU0A\")",
+      "PowerShell(firebase login:list *)",
+      "Bash(curl -s -o /dev/null -w \"web.app: HTTP %{http_code}\\\\n\" https://gravity-runner-2e4da.web.app/)",
+      "Bash(curl -s https://gravity-runner-2e4da.web.app/)"
     ]
   }
 }

@@ -19,6 +19,7 @@ export default class MenuCtrl extends cc.Component {
     private settingsPanel: cc.Node = null;
     private accountPanel: cc.Node = null;
     private boardPanel: cc.Node = null;
+    private savesPanel: cc.Node = null;
     private accountLabel: cc.Node = null;
     private accountStatus: cc.Node = null;
 
@@ -182,15 +183,21 @@ export default class MenuCtrl extends cc.Component {
             Fx.fadeTo("Editor", this.node);
         });
 
-        // account / leaderboard row
-        const aBtn = this.sprite(this.node, "white", -110, -272, 200, 38, cc.color(35, 45, 95));
-        this.label(aBtn, "ACCOUNT", 0, 0, 17, white);
+        // account / saves / leaderboard row
+        const aBtn = this.sprite(this.node, "white", -160, -272, 150, 38, cc.color(35, 45, 95));
+        this.label(aBtn, "ACCOUNT", 0, 0, 16, white);
         aBtn.on(cc.Node.EventType.TOUCH_END, () => {
             Sfx.play("click", 0.8);
             this.toggleAccount();
         });
-        const rBtn = this.sprite(this.node, "white", 110, -272, 200, 38, cc.color(35, 45, 95));
-        this.label(rBtn, "RANKING", 0, 0, 17, white);
+        const sBtn2 = this.sprite(this.node, "white", 0, -272, 150, 38, cc.color(35, 45, 95));
+        this.label(sBtn2, "SAVES", 0, 0, 16, white);
+        sBtn2.on(cc.Node.EventType.TOUCH_END, () => {
+            Sfx.play("click", 0.8);
+            this.toggleSaves();
+        });
+        const rBtn = this.sprite(this.node, "white", 160, -272, 150, 38, cc.color(35, 45, 95));
+        this.label(rBtn, "RANKING", 0, 0, 16, white);
         rBtn.on(cc.Node.EventType.TOUCH_END, () => {
             Sfx.play("click", 0.8);
             this.toggleBoard();
@@ -225,10 +232,11 @@ export default class MenuCtrl extends cc.Component {
         if (this.settingsPanel) { this.settingsPanel.destroy(); this.settingsPanel = null; }
         if (this.accountPanel) { this.accountPanel.destroy(); this.accountPanel = null; }
         if (this.boardPanel) { this.boardPanel.destroy(); this.boardPanel = null; }
+        if (this.savesPanel) { this.savesPanel.destroy(); this.savesPanel = null; }
     }
 
     private anyPanelOpen(): boolean {
-        return !!(this.settingsPanel || this.accountPanel || this.boardPanel);
+        return !!(this.settingsPanel || this.accountPanel || this.boardPanel || this.savesPanel);
     }
 
     private toggleSettings() {
@@ -311,8 +319,9 @@ export default class MenuCtrl extends cc.Component {
     private refreshAccount() {
         if (this.accountLabel && this.accountLabel.isValid) {
             const lb = this.accountLabel.getComponent(cc.Label);
+            const slot = Fb.activeSlotName();
             lb.string = !Fb.enabled() ? "OFFLINE MODE"
-                : Fb.user() ? "PLAYER: " + Fb.userName()
+                : Fb.user() ? "PLAYER: " + Fb.userName() + (slot ? "  [" + slot + "]" : "")
                 : "NOT LOGGED IN";
         }
         if (this.accountStatus && this.accountStatus.isValid) {
@@ -432,6 +441,104 @@ export default class MenuCtrl extends cc.Component {
             Sfx.play("click", 0.8);
             this.closePanels();
         });
+    }
+
+    // ---------- save slots panel ----------
+
+    private toggleSaves() {
+        if (this.savesPanel) {
+            this.closePanels();
+            return;
+        }
+        this.closePanels();
+        this.buildSavesPanel();
+    }
+
+    private buildSavesPanel() {
+        const white = cc.color(235, 240, 255);
+        const orange = cc.color(255, 181, 74);
+        const cyan = cc.color(127, 247, 255);
+        const dim = cc.color(110, 120, 150);
+
+        const panel = this.sprite(this.node, "white", 0, 0, 620, 540, cc.color(10, 12, 26));
+        panel.opacity = 248;
+        panel.zIndex = 50;
+        panel.on(cc.Node.EventType.TOUCH_START, (e: cc.Event) => e.stopPropagation());
+        this.savesPanel = panel;
+
+        this.label(panel, "SAVE SLOTS  (" + Fb.slotIds().length + "/8)", 0, 240, 26, orange);
+
+        const closeBtn = this.sprite(panel, "white", 0, -240, 160, 38, cc.color(50, 50, 60));
+        this.label(closeBtn, "CLOSE", 0, 0, 17, white);
+        closeBtn.on(cc.Node.EventType.TOUCH_END, () => {
+            Sfx.play("click", 0.8);
+            this.closePanels();
+        });
+
+        if (!Fb.user()) {
+            this.label(panel, "log in first (ACCOUNT panel)", 0, 40, 18, white);
+            return;
+        }
+
+        const nameEb = this.editBox(panel, -90, 196, 300, "slot name (for NEW / REN)", false);
+        const status = this.label(panel, "", 0, -205, 15, orange);
+        const say = (s: string) => { (status.getComponent(cc.Label)).string = s || ""; };
+
+        const newBtn = this.sprite(panel, "white", 180, 196, 130, 40, cc.color(20, 70, 40));
+        this.label(newBtn, "+ NEW", 0, 0, 16, white);
+        newBtn.on(cc.Node.EventType.TOUCH_END, () => {
+            Sfx.play("click", 0.8);
+            const err = Fb.createSlot(nameEb.string.trim());
+            if (err) { say(err); return; }
+            this.refreshAccount();
+            this.closePanels();
+            this.buildSavesPanel(); // re-render list
+        });
+
+        const ids = Fb.slotIds();
+        for (let i = 0; i < ids.length; i++) {
+            const id = ids[i];
+            const s = Fb.slots[id];
+            const active = id === Fb.activeSlot;
+            const y = 150 - i * 44;
+            const row = this.sprite(panel, "white", 0, y, 580, 38,
+                active ? cc.color(30, 60, 90) : cc.color(22, 30, 60));
+            this.label(row, (active ? "> " : "") + s.name, -270, 0, 16, active ? cyan : white, 0);
+            this.label(row, "Lv" + s.unlocked + "   " + s.best + "m", -60, 0, 14, dim, 0);
+            const mk = (text: string, x: number, color: cc.Color, cb: () => void) => {
+                const b = this.sprite(row, "white", x, 0, 62, 28, color);
+                this.label(b, text, 0, 0, 12, white);
+                b.on(cc.Node.EventType.TOUCH_END, (e: cc.Event) => {
+                    e.stopPropagation();
+                    Sfx.play("click", 0.7);
+                    cb();
+                });
+            };
+            mk("LOAD", 120, cc.color(20, 70, 40), () => {
+                const err = Fb.loadSlot(id);
+                if (err) { say(err); return; }
+                // reload the menu so level locks / endless best reflect the slot
+                cc.director.loadScene("Menu");
+            });
+            mk("SAVE", 190, cc.color(70, 55, 15), () => {
+                const err = Fb.overwriteSlot(id);
+                say(err ? err : "current progress saved to \"" + s.name + "\"");
+                this.refreshAccount();
+                this.closePanels();
+                this.buildSavesPanel();
+            });
+            mk("REN", 258, cc.color(40, 30, 70), () => {
+                const err = Fb.renameSlot(id, nameEb.string.trim());
+                if (err) { say(err); return; }
+                this.refreshAccount();
+                this.closePanels();
+                this.buildSavesPanel();
+            });
+        }
+
+        this.label(panel,
+            "LOAD = play this slot     SAVE = overwrite slot with current progress     REN = rename",
+            0, -175, 13, dim);
     }
 
     private toggleBoard() {
