@@ -4,6 +4,7 @@ import EndlessGen from "./EndlessGen";
 import Player from "./Player";
 import CameraFollow from "./CameraFollow";
 import Sfx from "./Sfx";
+import Fb from "./Fb";
 
 const { ccclass } = cc._decorator;
 
@@ -61,6 +62,7 @@ export default class GameMgr extends cc.Component {
     onLoad() {
         Sfx.preload();
         Sfx.playBgm();
+        Fb.init();
         this.cameraNode = this.node.getChildByName("Main Camera");
 
         cc.systemEvent.on(cc.SystemEvent.EventType.KEY_DOWN, this.onKeyDown, this);
@@ -229,7 +231,10 @@ export default class GameMgr extends cc.Component {
         const meters = Math.floor(this.distPx / 10);
         const best = GameData.getBestDist();
         const newBest = meters > best;
-        if (newBest) GameData.setBestDist(meters);
+        if (newBest) {
+            GameData.setBestDist(meters);
+            Fb.syncUp();
+        }
         this.setMsg(
             newBest ? "NEW BEST!  " + meters + "m" : "RUN OVER  —  " + meters + "m",
             "BEST " + Math.max(meters, best) + "m    CRYSTALS " + this.crystalsTaken
@@ -532,13 +537,17 @@ export default class GameMgr extends cc.Component {
             this.endlessGameOver();
             return;
         }
-        // quick auto-retry keeps the rhythm going
+        // brief fail screen, then auto-retry to keep the rhythm going
         this.state = "dead";
         this.unscheduleAllCallbacks();
+        this.msgLabel.node.color = cc.color(255, 90, 100);
+        this.setMsg("FAILED", "");
         this.scheduleOnce(() => {
+            this.msgLabel.node.color = cc.color(235, 240, 255);
+            this.setMsg("", "");
             this.respawnAll();
             this.state = "run";
-        }, 0.8);
+        }, 0.9);
     }
 
     private anyAlive(): Player {
@@ -554,7 +563,10 @@ export default class GameMgr extends cc.Component {
         this.unscheduleAllCallbacks();
         Sfx.play("win", 0.9);
         const custom = GameData.currentLevel === 0;
-        if (!custom) GameData.unlockNext(GameData.currentLevel);
+        if (!custom) {
+            GameData.unlockNext(GameData.currentLevel);
+            Fb.syncUp();
+        }
         const last = !custom && GameData.currentLevel >= GameData.MAX_LEVEL;
         this.setMsg(
             last ? "YOU ESCAPED ASTRA-9!" : "LEVEL CLEAR!",
