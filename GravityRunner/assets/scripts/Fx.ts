@@ -183,6 +183,94 @@ export default class Fx {
             .start();
     }
 
+
+    // rhythm red-note hop burst
+    static rhythmJump(parent: cc.Node, x: number, y: number, gravityDir: number) {
+        if (!Fx.frame || !parent || !parent.isValid) return;
+        const p = Fx.ps(parent, x, y);
+        p.totalParticles = 20;
+        p.duration = 0.08;
+        p.emissionRate = 360;
+        p.life = 0.32;
+        p.lifeVar = 0.10;
+        p.startSize = 7;
+        p.startSizeVar = 3;
+        p.endSize = 1;
+        p.startColor = cc.color(255, 82, 78, 230);
+        p.endColor = cc.color(255, 230, 210, 0);
+        p.angle = gravityDir > 0 ? 270 : 90;
+        p.angleVar = 55;
+        p.speed = 160;
+        p.speedVar = 70;
+        p.gravity = cc.v2(0, 0);
+        p.posVar = cc.v2(10, 6);
+    }
+
+    // rhythm blue-note gravity flip burst
+    static rhythmFlip(parent: cc.Node, x: number, y: number) {
+        if (!Fx.frame || !parent || !parent.isValid) return;
+        const p = Fx.ps(parent, x, y);
+        p.totalParticles = 34;
+        p.duration = 0.12;
+        p.emissionRate = 420;
+        p.life = 0.42;
+        p.lifeVar = 0.12;
+        p.startSize = 8;
+        p.startSizeVar = 4;
+        p.endSize = 1;
+        p.startColor = cc.color(85, 185, 255, 245);
+        p.endColor = cc.color(220, 250, 255, 0);
+        p.angle = 90;
+        p.angleVar = 180;
+        p.speed = 210;
+        p.speedVar = 90;
+        p.tangentialAccel = 260;
+        p.gravity = cc.v2(0, 0);
+        p.posVar = cc.v2(12, 12);
+    }
+
+    static rhythmMiss(parent: cc.Node, x: number, y: number) {
+        if (!Fx.frame || !parent || !parent.isValid) return;
+        const p = Fx.ps(parent, x, y);
+        p.totalParticles = 12;
+        p.duration = 0.06;
+        p.emissionRate = 250;
+        p.life = 0.25;
+        p.lifeVar = 0.06;
+        p.startSize = 9;
+        p.startSizeVar = 3;
+        p.endSize = 1;
+        p.startColor = cc.color(255, 90, 100, 210);
+        p.endColor = cc.color(255, 90, 100, 0);
+        p.angle = 90;
+        p.angleVar = 180;
+        p.speed = 120;
+        p.speedVar = 60;
+        p.gravity = cc.v2(0, 0);
+        p.posVar = cc.v2(8, 8);
+    }
+
+    static popup(parent: cc.Node, x: number, y: number, text: string, color: cc.Color) {
+        if (!parent || !parent.isValid) return;
+        const n = new cc.Node("popup");
+        const l = n.addComponent(cc.Label);
+        l.string = text;
+        l.fontSize = 24;
+        l.lineHeight = 26;
+        n.color = color;
+        n.opacity = 255;
+        n.setPosition(x, y);
+        n.zIndex = 120;
+        parent.addChild(n);
+        cc.tween(n)
+            .parallel(
+                cc.tween().by(0.45, { y: 42 }),
+                cc.tween().to(0.45, { opacity: 0, scale: 1.35 })
+            )
+            .call(() => n.destroy())
+            .start();
+    }
+
     // ---------- scene fade transitions ----------
 
     // `parent` must be a node glued to the camera (hud / menu canvas / editor ui).

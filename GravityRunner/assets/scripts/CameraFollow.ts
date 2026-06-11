@@ -10,12 +10,17 @@ export default class CameraFollow extends cc.Component {
     private lookAhead = 160;
     private smooth = 10;
 
-    init(target: cc.Node, minX: number, maxX: number) {
+    init(target: cc.Node, minX: number, maxX: number, lookAhead?: number) {
         this.target = target;
         this.minX = minX;
         this.maxX = Math.max(minX, maxX);
+        if (lookAhead !== undefined) this.lookAhead = lookAhead;
         this.node.x = minX;
         this.node.y = 0;
+    }
+
+    setLookAhead(px: number) {
+        this.lookAhead = px;
     }
 
     setTarget(target: cc.Node) {

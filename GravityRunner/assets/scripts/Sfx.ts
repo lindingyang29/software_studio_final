@@ -1,10 +1,12 @@
 import GameData from "./GameData";
 
-// Tiny audio helper. Clips live in assets/resources/audio/<name>.wav (or .mp3).
+// Tiny audio helper. Clips live in assets/resources/audio/<name>.<ext>.
 // All volumes are scaled by the user's settings (GameData.settings).
 export default class Sfx {
     private static clips: { [name: string]: cc.AudioClip } = {};
     private static bgmId = -1;
+    private static musicName = "";
+    private static loadingMusicName = "";
 
     static preload() {
         const names = ["flip", "crystal", "death", "win", "click", "power", "teleport", "shieldbreak"];
@@ -22,17 +24,53 @@ export default class Sfx {
         if (clip && v > 0) cc.audioEngine.play(clip, false, v);
     }
 
-    // BGM is optional: drop a file at resources/audio/bgm.mp3 and this picks it up.
+    // BGM is optional: drop a file at resources/audio/bgm.mp3/.ogg and this picks it up.
     static playBgm() {
-        if (Sfx.bgmId >= 0) {
+        Sfx.playMusic("bgm", true);
+    }
+
+    // Plays a named music clip from resources/audio/<name>.
+    // Used by rhythm levels so the chart can start exactly when the run starts.
+    static playMusic(name: string, loop: boolean = true, onStarted?: () => void) {
+        if (!name) name = "bgm";
+        if (Sfx.bgmId >= 0 && Sfx.musicName === name) {
             Sfx.applyBgmVolume();
+            if (onStarted) onStarted();
             return;
         }
-        cc.resources.load("audio/bgm", cc.AudioClip, (err, clip) => {
-            if (!err && clip && Sfx.bgmId < 0) {
-                Sfx.bgmId = cc.audioEngine.play(clip as any, true, GameData.settings.bgm);
+
+        Sfx.stopBgm();
+        Sfx.loadingMusicName = name;
+        cc.resources.load("audio/" + name, cc.AudioClip, (err, clip) => {
+            if (Sfx.loadingMusicName !== name) return;
+            if (err || !clip) {
+                cc.warn("music load failed: audio/" + name, err);
+                Sfx.loadingMusicName = "";
+                if (onStarted) onStarted(); // keep the level playable even without audio
+                return;
             }
+            Sfx.bgmId = cc.audioEngine.play(clip as any, loop, GameData.settings.bgm);
+            Sfx.musicName = name;
+            Sfx.loadingMusicName = "";
+            if (onStarted) onStarted();
         });
+    }
+
+    static getMusicTime(): number {
+        if (Sfx.bgmId < 0) return 0;
+        try {
+            return cc.audioEngine.getCurrentTime(Sfx.bgmId) || 0;
+        } catch (e) {
+            return 0;
+        }
+    }
+
+    static pauseMusic() {
+        if (Sfx.bgmId >= 0) cc.audioEngine.pause(Sfx.bgmId);
+    }
+
+    static resumeMusic() {
+        if (Sfx.bgmId >= 0) cc.audioEngine.resume(Sfx.bgmId);
     }
 
     static applyBgmVolume() {
@@ -40,9 +78,11 @@ export default class Sfx {
     }
 
     static stopBgm() {
+        Sfx.loadingMusicName = "";
         if (Sfx.bgmId >= 0) {
             cc.audioEngine.stop(Sfx.bgmId);
             Sfx.bgmId = -1;
         }
+        Sfx.musicName = "";
     }
 }

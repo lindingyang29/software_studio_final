@@ -1,4 +1,4 @@
-import { LevelData, RectDef } from "./LevelBuilder";
+import { LevelData, RectDef, FLOOR_Y, CEIL_Y } from "./LevelBuilder";
 import Sfx from "./Sfx";
 import Fx from "./Fx";
 import GameMgr from "./GameMgr";
@@ -23,6 +23,13 @@ export default class Player extends cc.Component {
     private vy = 0;
     private gravityDir = -1; // -1: pulls toward floor, +1: toward ceiling
     private grounded = false;
+    private rhythmLaneIndex = 0;
+    private rhythmTargetY = 0;
+    private rhythmFlipAirborne = false;
+    private rhythmLastSurfaceDir = -1;
+    private rhythmSnapBackT = 0;
+    private rhythmSnapBackY = 0;
+    private rhythmSnapBackDir = -1;
 
     // power-up state
     private shield = false;
@@ -73,6 +80,9 @@ export default class Player extends cc.Component {
         this.vy = 0;
         this.gravityDir = -1;
         this.grounded = true;
+        this.rhythmLaneIndex = this.nearestRhythmLane(this.level.start.y);
+        this.rhythmTargetY = this.getRhythmLaneY(this.rhythmLaneIndex);
+        if (this.isMultiLaneRhythm()) this.node.y = this.rhythmTargetY;
         this.alive = true;
         this.shield = false;
         this.magnetT = 0;
@@ -82,6 +92,11 @@ export default class Player extends cc.Component {
         this.brakeT = 0;
         this.brakeCd = 0;
         this.wasGrounded = true;
+        this.rhythmFlipAirborne = false;
+        this.rhythmLastSurfaceDir = this.gravityDir;
+        this.rhythmSnapBackT = 0;
+        this.rhythmSnapBackY = this.node.y;
+        this.rhythmSnapBackDir = this.gravityDir;
         this.shieldNode.active = false;
         this.magnetAura.active = false;
         this.node.active = true;
@@ -120,18 +135,191 @@ export default class Player extends cc.Component {
             .start();
     }
 
+    private isMultiLaneRhythm(): boolean {
+        return !!(this.level && this.level.rhythm && this.level.rhythm.enabled && this.level.rhythm.style === "gravity-collect");
+    }
+
+    private isJumpFlipRhythm(): boolean {
+        return !!(this.level && this.level.rhythm && this.level.rhythm.enabled && this.level.rhythm.style === "jump-flip");
+    }
+
+    private rhythmLaneYs(): number[] {
+        const r = this.level && this.level.rhythm;
+        if (r && r.laneYs && r.laneYs.length >= 2) return r.laneYs;
+        return [-212, -106, 0, 106, 212];
+    }
+
+    private getRhythmLaneY(idx: number): number {
+        const ys = this.rhythmLaneYs();
+        const i = Math.max(0, Math.min(ys.length - 1, idx | 0));
+        return ys[i];
+    }
+
+    private nearestRhythmLane(y: number): number {
+        const ys = this.rhythmLaneYs();
+        let best = 0;
+        let bd = 1e9;
+        for (let i = 0; i < ys.length; i++) {
+            const d = Math.abs(ys[i] - y);
+            if (d < bd) { bd = d; best = i; }
+        }
+        return best;
+    }
+
+    rhythmStepToLane(idx: number, dir: number) {
+        if (!this.alive || !this.isMultiLaneRhythm()) return;
+        const ys = this.rhythmLaneYs();
+        this.rhythmLaneIndex = Math.max(0, Math.min(ys.length - 1, idx | 0));
+        this.rhythmTargetY = ys[this.rhythmLaneIndex];
+        if (dir !== 0) this.gravityDir = dir > 0 ? 1 : -1;
+        this.vy = 0;
+        this.grounded = true;
+        this.wasGrounded = true;
+        this.node.stopAllActions();
+        this.node.scaleY = this.gravityDir > 0 ? -1 : 1;
+        cc.tween(this.node)
+            .to(0.09, { y: this.rhythmTargetY, angle: this.node.angle + (this.gravityDir > 0 ? -120 : 120) }, { easing: "sineOut" })
+            .start();
+        Fx.flipDust(this.node.parent, this.node.x, this.node.y, this.gravityDir);
+        Sfx.play("flip", 0.65);
+    }
+
+    rhythmFreeStep() {
+        if (!this.alive || !this.isMultiLaneRhythm()) { this.flip(); return; }
+        this.gravityDir *= -1;
+        const ys = this.rhythmLaneYs();
+        const next = Math.max(0, Math.min(ys.length - 1, this.rhythmLaneIndex + (this.gravityDir > 0 ? 1 : -1)));
+        this.rhythmStepToLane(next, this.gravityDir);
+    }
+
+    getRhythmLaneIndex(): number {
+        if (this.isMultiLaneRhythm()) return this.rhythmLaneIndex;
+        return this.nearestRhythmLane(this.node.y);
+    }
+
     flip() {
-        if (!this.alive || !this.grounded) return;
+        const rhythmMode = !!(this.mgr && (this.mgr as any).isRhythmMode && (this.mgr as any).isRhythmMode());
+        if (!this.alive || (!this.grounded && !rhythmMode)) return;
         const feetY = this.node.y + this.gravityDir * 17;
+
+        if (this.isJumpFlipRhythm()) {
+            // Rhythm mode must feel like a key tap, not a slow platformer arc.
+            // Flip is therefore effectively instant (< 10 ms): the player snaps
+            // to the opposite rail, while the squash / flash gives visual feedback.
+            this.rhythmSnapBackT = 0;
+            const oldDir = this.gravityDir;
+            this.gravityDir *= -1;
+            const r = this.level.rhythm;
+            const targetY = this.gravityDir > 0 ? (r.ceilingY - 18) : (r.floorY + 18);
+            this.vy = 0;
+            this.node.y = targetY;
+            this.grounded = true;
+            this.wasGrounded = true;
+            this.rhythmFlipAirborne = false;
+            this.rhythmLastSurfaceDir = this.gravityDir;
+            this.node.stopAllActions();
+            this.node.scaleY = this.gravityDir > 0 ? -1 : 1;
+            cc.tween(this.node)
+                .by(Math.max(0.001, Math.min(0.009, r.flipTravelTime || 0.008)), { angle: this.gravityDir > 0 ? -90 : 90 })
+                .start();
+            Fx.flipDust(this.node.parent, this.node.x, feetY, this.gravityDir);
+            Fx.rhythmFlip(this.node.parent, this.node.x, this.node.y);
+            Sfx.play("flip", 0.8);
+            if (oldDir !== this.gravityDir && this.mgr && (this.mgr as any).onRhythmSurfaceHit) {
+                (this.mgr as any).onRhythmSurfaceHit(this.node.x, this.node.y);
+            }
+            return;
+        }
+
         this.gravityDir *= -1;
         this.grounded = false;
         this.wasGrounded = false;
+        if (rhythmMode && this.level && this.level.rhythm) {
+            // Rhythm charts can be faster than normal platforming.  Use chart-tuned
+            // gravity / impulse so flip travel time follows the BPM.
+            const impulse = this.level.rhythm.flipImpulse || 0;
+            this.vy = this.gravityDir * Math.max(Math.abs(this.vy), impulse);
+        }
         // animated spin-flip instead of an instant mirror
         cc.tween(this.node)
             .to(0.16, { scaleY: this.gravityDir > 0 ? -1 : 1 })
             .start();
         Fx.flipDust(this.node.parent, this.node.x, feetY, this.gravityDir);
         Sfx.play("flip", 0.8);
+    }
+
+    rhythmLightJump() {
+        if (!this.alive) return;
+        if (!this.isJumpFlipRhythm()) { this.flip(); return; }
+        // No air-jump.  This prevents repeated light-jumps from launching the
+        // player out of the corridor.
+        if (!this.grounded) return;
+
+        const r = this.level.rhythm;
+        const hop = r.jumpHeight || 62;
+        const startY = this.node.y;
+        const peakY = startY - this.gravityDir * hop;
+        const dur = Math.max(0.055, Math.min(0.16, r.jumpReturnTime || 0.10));
+        const upT = Math.max(0.018, Math.min(0.045, dur * 0.38));
+        const downT = Math.max(0.025, dur - upT);
+        this.rhythmSnapBackT = dur + 0.02;
+        this.rhythmSnapBackY = startY;
+        this.rhythmSnapBackDir = this.gravityDir;
+
+        // Movement is responsive, but the visual arc lasts long enough to read as
+        // a real light jump. Scoring is still collision-based in GameMgr, so
+        // pressing jump alone does not award points.
+        this.vy = 0;
+        this.grounded = false;
+        this.wasGrounded = false;
+        this.rhythmFlipAirborne = false;
+        this.node.stopAllActions();
+        const sign = this.gravityDir > 0 ? -1 : 1;
+        this.node.scaleX = 0.86;
+        this.node.scaleY = sign * 1.18;
+        cc.tween(this.node)
+            .parallel(
+                cc.tween().to(upT, { y: peakY }, { easing: "sineOut" })
+                    .to(downT, { y: startY }, { easing: "sineIn" }),
+                cc.tween().to(0.06, { scaleX: 1, scaleY: sign })
+            )
+            .call(() => {
+                if (this.alive && this.isJumpFlipRhythm() && this.gravityDir === this.rhythmSnapBackDir) {
+                    this.node.y = startY;
+                    this.vy = 0;
+                    this.grounded = true;
+                    this.wasGrounded = true;
+                    this.rhythmSnapBackT = 0;
+                }
+            })
+            .start();
+        Fx.rhythmJump(this.node.parent, this.node.x, peakY, this.gravityDir);
+        Sfx.play("click", 0.75);
+    }
+
+
+    rhythmWarpToLane(lane: string) {
+        if (!this.alive) return;
+        const targetDir = lane === "ceiling" ? 1 : -1;
+        const targetY = targetDir > 0 ? CEIL_Y - 18 : FLOOR_Y + 18;
+        const fromY = this.node.y;
+        this.gravityDir = targetDir;
+        this.vy = 0;
+        this.grounded = true;
+        this.wasGrounded = true;
+        this.node.stopAllActions();
+        this.node.scaleY = targetDir > 0 ? -1 : 1;
+        // Rhythm mode keeps the original flip fantasy, but makes switching lanes
+        // snappy enough for music charts. The player is attached to the selected rail.
+        cc.tween(this.node)
+            .to(0.10, { y: targetY, angle: this.node.angle + (targetDir > 0 ? -180 : 180) }, { easing: "sineOut" })
+            .start();
+        Fx.flipDust(this.node.parent, this.node.x, fromY, this.gravityDir);
+        Sfx.play("flip", 0.75);
+    }
+
+    getLane(): string {
+        return this.gravityDir > 0 ? "ceiling" : "floor";
     }
 
     // speed burst with afterimages (cooldown 2.5s)
@@ -186,8 +374,41 @@ export default class Player extends cc.Component {
                 this.ghostT = 0.05;
             }
         }
-        this.vy += this.gravityDir * GRAVITY * dt;
-        this.vy = Math.max(-MAX_FALL, Math.min(MAX_FALL, this.vy));
+        const rhythm = this.level ? this.level.rhythm : null;
+        if (rhythm && rhythm.enabled && rhythm.style === "jump-flip" && this.rhythmSnapBackT > 0) {
+            // During the scripted light-jump arc, keep the player under direct
+            // rhythm control instead of normal gravity, so the hop is readable
+            // and cannot accidentally launch the cube out of the corridor.
+            this.rhythmSnapBackT -= rawDt;
+            if (this.rhythmSnapBackT <= 0 && this.gravityDir === this.rhythmSnapBackDir) {
+                this.node.y = this.rhythmSnapBackY;
+                this.vy = 0;
+                this.grounded = true;
+                this.wasGrounded = true;
+            }
+            if (this.overlaps(this.level.goal, 0)) {
+                this.alive = false;
+                this.mgr.onWin(this);
+            }
+            return;
+        }
+        if (rhythm && rhythm.enabled && rhythm.style === "gravity-collect") {
+            // Multi-lane rhythm mode: the runner is a rail-rider.  Gravity flips
+            // choose which rhythm lane to move toward; missing notes does not kill.
+            const diffY = this.rhythmTargetY - n.y;
+            const maxStep = 1800 * dt;
+            if (Math.abs(diffY) <= maxStep) n.y = this.rhythmTargetY;
+            else n.y += diffY > 0 ? maxStep : -maxStep;
+            if (this.overlaps(this.level.goal, 0)) {
+                this.alive = false;
+                this.mgr.onWin(this);
+            }
+            return;
+        }
+        const gravity = rhythm && rhythm.enabled ? (rhythm.gravity || GRAVITY) : GRAVITY;
+        const maxFall = rhythm && rhythm.enabled ? (rhythm.maxFall || MAX_FALL) : MAX_FALL;
+        this.vy += this.gravityDir * gravity * dt;
+        this.vy = Math.max(-maxFall, Math.min(maxFall, this.vy));
         n.y += this.vy * dt;
 
         this.grounded = false;
@@ -228,6 +449,14 @@ export default class Player extends cc.Component {
             n.scaleX = 1.18;
             n.scaleY = sign * 0.8;
             cc.tween(n).to(0.12, { scaleX: 1, scaleY: sign }).start();
+            if (this.isJumpFlipRhythm()) {
+                if (this.rhythmFlipAirborne && this.gravityDir !== this.rhythmLastSurfaceDir &&
+                    this.mgr && (this.mgr as any).onRhythmSurfaceHit) {
+                    (this.mgr as any).onRhythmSurfaceHit(this.node.x, this.node.y);
+                }
+                this.rhythmLastSurfaceDir = this.gravityDir;
+                this.rhythmFlipAirborne = false;
+            }
         }
         this.wasGrounded = this.grounded;
 
@@ -343,6 +572,11 @@ export default class Player extends cc.Component {
             .call(() => { this.node.active = false; })
             .start();
         this.mgr.onDeath(this);
+    }
+
+    rhythmGateFail() {
+        if (this.isMultiLaneRhythm()) return;
+        this.die();
     }
 
     getGravityDir(): number {

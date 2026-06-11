@@ -6,6 +6,10 @@ export interface Settings {
     speed: number;      // game speed multiplier 0.8 / 1.0 / 1.2
     scheme: number;     // color scheme index, see LevelBuilder.SCHEMES
     brightness: number; // 0.6 / 0.8 / 1.0
+    rhythmGap: number; // rhythm mode floor/ceiling distance in px
+    rhythmJumpKeys: string; // comma-separated key names, e.g. f,j
+    rhythmFlipKeys: string; // comma-separated key names, e.g. d,k
+    rhythmSpeedScale: number; // rhythm scroll / flow multiplier, 0.1..2.0
 }
 
 export default class GameData {
@@ -14,6 +18,10 @@ export default class GameData {
     // Which level the Game scene should load. 0 = the player-made custom
     // level stored in localStorage under CUSTOM_KEY (see EditorCtrl).
     static currentLevel = 1;
+    // Optional resources path for rhythm levels, for example
+    // "levels/rhythm/my_song_oni". When empty, GameMgr loads
+    // the classic numbered path "levels/level" + currentLevel.
+    static currentLevelPath = "";
 
     static readonly CUSTOM_KEY = "gfr_custom_level";
 
@@ -56,13 +64,14 @@ export default class GameData {
     }
 
     private static loadSettings(): Settings {
-        const def: Settings = { sfx: 1, bgm: 0.6, speed: 1, scheme: 0, brightness: 1 };
+        const def: Settings = { sfx: 1, bgm: 0.6, speed: 1, scheme: 0, brightness: 1, rhythmGap: 280, rhythmJumpKeys: "f,j", rhythmFlipKeys: "d,k", rhythmSpeedScale: 1 };
         try {
             const raw = cc.sys.localStorage.getItem(GameData.SETTINGS_KEY);
             if (raw) {
                 const s = JSON.parse(raw);
                 for (const k in def) {
-                    if (typeof s[k] === "number") (def as any)[k] = s[k];
+                    if (typeof (def as any)[k] === "number" && typeof s[k] === "number") (def as any)[k] = s[k];
+                    if (typeof (def as any)[k] === "string" && typeof s[k] === "string") (def as any)[k] = s[k];
                 }
             }
         } catch (e) { /* corrupted settings -> defaults */ }
