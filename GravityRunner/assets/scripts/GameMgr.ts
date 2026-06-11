@@ -175,7 +175,7 @@ export default class GameMgr extends cc.Component {
     // ---------- endless mode ----------
 
     private endlessBaseSpeed(): number {
-        return 280 * GameData.settings.speed;
+        return 300 * GameData.settings.speed;
     }
 
     private startEndless() {
@@ -603,7 +603,7 @@ export default class GameMgr extends cc.Component {
 
         // endless: ramp speed, track distance, stream chunks ahead / drop behind
         if (this.endless) {
-            this.level.speed = this.endlessBaseSpeed() + Math.min(180, this.distPx / 110);
+            this.level.speed = this.endlessBaseSpeed() + Math.min(240, this.distPx / 80);
             const lead = this.anyAlive();
             if (lead && lead.node.x > this.distPx) this.distPx = lead.node.x;
             this.distLabel.string = Math.floor(this.distPx / 10) + "m   BEST " + GameData.getBestDist() + "m";

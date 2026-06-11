@@ -8,11 +8,14 @@
 // - all spacing is derived from the CURRENT speed (reaction seconds), so the
 //   speed ramp stays fair
 // - difficulty: patterns unlock by distance, clusters grow, spacing tightens
-// - variety rules: no immediate pattern repeats, a breather every <=4
+// - variety rules: no immediate pattern repeats, a breather every <=5
 //   patterns, and ~2.6k-px "theme blocks" that bias toward one pattern type
 //   so sections feel distinct
+//
+// Fairness floor: reaction spacing never drops below 0.81s of travel, which
+// stays above flip airtime (0.58s) + human reaction margin.
 
-const REACT = 0.95;   // seconds of reaction time per obstacle
+const REACT = 0.88;   // seconds of reaction time per obstacle
 const TRAVEL = 0.58;  // flip airtime in seconds
 
 interface Gap { side: string; x: number; w: number; }
@@ -27,7 +30,7 @@ export default class EndlessGen {
 
     constructor(startX: number) {
         this.x = startX;
-        this.nextPowerX = startX + 1800;
+        this.nextPowerX = startX + 2200;
     }
 
     getX(): number {
@@ -40,13 +43,13 @@ export default class EndlessGen {
             segments: [], spikes: [], crystals: [], powerups: [],
             teleports: [], enemies: [], movers: [], rotations: []
         };
-        // spacing tightens a little with distance, never below the fair limit
-        const k = Math.max(0.9, 1.15 - (distPx / 40000) * 0.3);
+        // spacing tightens with distance, never below the fairness floor
+        const k = Math.max(0.92, 1.05 - (distPx / 30000) * 0.25);
         const react = speed * REACT * k;
         const travel = speed * TRAVEL;
 
         let id: string;
-        if (this.sinceBreather >= 4) id = "breather";
+        if (this.sinceBreather >= 5) id = "breather";
         else id = this.pick(distPx);
         this.lastId = id;
         this.sinceBreather = id === "breather" ? 0 : this.sinceBreather + 1;
@@ -59,6 +62,7 @@ export default class EndlessGen {
             case "cluster": len = this.pCluster(f, x0, react, travel, speed, distPx); break;
             case "gapSingle": len = this.pGapSingle(f, x0, react, speed); break;
             case "gapDouble": len = this.pGapDouble(f, x0, react, travel, speed); break;
+            case "gapSpike": len = this.pGapSpike(f, x0, react, travel, speed); break;
             case "piston": len = this.pPiston(f, x0, react, distPx); break;
             case "drone": len = this.pDrone(f, x0, react, distPx); break;
             case "tport": len = this.pTeleport(f, x0, react); break;
@@ -75,11 +79,12 @@ export default class EndlessGen {
 
     private pool(distPx: number): string[] {
         const p = ["rhythm", "cluster", "gapSingle"];
-        if (distPx > 1500) p.push("piston");
-        if (distPx > 2500) p.push("drone");
-        if (distPx > 3000) p.push("rotwave");
-        if (distPx > 4000) p.push("gapDouble");
-        if (distPx > 5000) p.push("tport");
+        if (distPx > 800) p.push("piston");
+        if (distPx > 1200) p.push("drone");
+        if (distPx > 2000) p.push("rotwave");
+        if (distPx > 2200) p.push("gapDouble");
+        if (distPx > 3000) p.push("tport");
+        if (distPx > 5000) p.push("gapSpike");
         return p;
     }
 
@@ -125,7 +130,7 @@ export default class EndlessGen {
         const types = ["shield", "magnet", "slow"];
         const y = Math.random() < 0.5 ? -212 : 212;
         f.powerups.push({ x: x, y: y, type: types[Math.floor(Math.random() * types.length)] });
-        this.nextPowerX = x + 2600 + Math.random() * 1400;
+        this.nextPowerX = x + 3200 + Math.random() * 1600;
     }
 
     private side(): string {
@@ -139,16 +144,17 @@ export default class EndlessGen {
     // ---------- patterns ----------
 
     private pBreather(f: any, x0: number, react: number): number {
-        const len = Math.max(560, react * 2.2);
+        const len = Math.max(480, react * 1.8);
         this.bands(f, x0, len);
-        this.line(f, x0 + 140, 4, this.lineY(this.side()));
+        this.line(f, x0 + 120, 4, this.lineY(this.side()));
         this.maybePowerup(f, x0 + len / 2);
         return len;
     }
 
     private pRhythm(f: any, x0: number, react: number, travel: number, distPx: number): number {
-        const n = 2 + Math.floor(Math.random() * 2) + (distPx > 10000 ? 1 : 0);
-        const s = react * (1.0 + Math.random() * 0.2);
+        const n = 2 + Math.floor(Math.random() * 2)
+            + (distPx > 6000 ? 1 : 0) + (distPx > 14000 ? 1 : 0);
+        const s = react * (0.95 + Math.random() * 0.15);
         let side = this.side();
         for (let i = 1; i <= n; i++) {
             f.spikes.push({ x: x0 + s * i, side: side });
@@ -161,7 +167,7 @@ export default class EndlessGen {
     }
 
     private pCluster(f: any, x0: number, react: number, travel: number, speed: number, distPx: number): number {
-        const m = 2 + (distPx > 8000 ? 1 : 0);
+        const m = 2 + (distPx > 4000 ? 1 : 0) + (distPx > 12000 ? 1 : 0);
         const a = x0 + react;
         const b = a + Math.max(1.5 * react, travel + 0.4 * speed);
         const firstFloor = Math.random() < 0.5;
@@ -177,7 +183,7 @@ export default class EndlessGen {
 
     private pGapSingle(f: any, x0: number, react: number, speed: number): number {
         const side = this.side();
-        const g = speed * (0.55 + Math.random() * 0.15);
+        const g = speed * (0.6 + Math.random() * 0.2);
         const gapX = x0 + react;
         const len = react * 2 + g;
         this.bands(f, x0, len, [{ side: side, x: gapX, w: g }]);
@@ -187,9 +193,9 @@ export default class EndlessGen {
     }
 
     private pGapDouble(f: any, x0: number, react: number, travel: number, speed: number): number {
-        const g = 0.6 * speed;
+        const g = 0.65 * speed;
         const a = x0 + react;
-        const b = a + Math.max(1.7 * react, travel + 0.45 * speed);
+        const b = a + Math.max(1.6 * react, travel + 0.4 * speed);
         const len = b + g + react - x0;
         this.bands(f, x0, len, [
             { side: "floor", x: a, w: g },
@@ -200,35 +206,52 @@ export default class EndlessGen {
         return len;
     }
 
+    // gap, then a spike waiting near where you land on the other side
+    private pGapSpike(f: any, x0: number, react: number, travel: number, speed: number): number {
+        const side = this.side();
+        const other = side === "floor" ? "ceiling" : "floor";
+        const g = speed * (0.55 + Math.random() * 0.15);
+        const a = x0 + react;
+        const spikeX = a + travel + 0.85 * react;
+        const len = spikeX + react - x0;
+        this.bands(f, x0, len, [{ side: side, x: a, w: g }]);
+        f.spikes.push({ x: spikeX, side: other });
+        f.crystals.push({ x: a + g / 2, y: 0 });
+        return len;
+    }
+
     private pPiston(f: any, x0: number, react: number, distPx: number): number {
         const side = this.side();
-        const period = Math.max(1.8, 2.4 - distPx / 30000);
+        const period = Math.max(1.5, 2.2 - distPx / 20000);
         const px = x0 + react;
         f.movers.push({ x: px, w: 280, side: side, amp: 140, period: period, phase: 0 });
         f.crystals.push({ x: px + 140, y: side === "floor" ? -150 : 150 });
         let len = react * 2 + 280;
-        if (distPx > 6000 && Math.random() < 0.5) {
+        if (distPx > 3000 && Math.random() < 0.65) {
             const other = side === "floor" ? "ceiling" : "floor";
-            f.movers.push({ x: px + 560, w: 280, side: other, amp: 140, period: period, phase: period * 0.5 });
-            f.crystals.push({ x: px + 700, y: other === "floor" ? -150 : 150 });
-            len += 560;
+            f.movers.push({ x: px + 480, w: 280, side: other, amp: 140, period: period, phase: period * 0.5 });
+            f.crystals.push({ x: px + 620, y: other === "floor" ? -150 : 150 });
+            len += 480;
         }
         this.bands(f, x0, len);
         return len;
     }
 
     private pDrone(f: any, x0: number, react: number, distPx: number): number {
-        const n = 1 + (distPx > 9000 && Math.random() < 0.5 ? 1 : 0);
+        const n = 1
+            + (distPx > 4000 && Math.random() < 0.5 ? 1 : 0)
+            + (distPx > 12000 && Math.random() < 0.4 ? 1 : 0);
         for (let i = 1; i <= n; i++) {
+            const horizontal = Math.random() < 0.25;
             f.enemies.push({
-                x: x0 + react * 1.5 * i,
+                x: x0 + react * 1.4 * i,
                 y: -100 + Math.random() * 200,
-                axis: "y",
-                range: 100 + Math.random() * 60,
-                period: 1.6 + Math.random() * 0.6
+                axis: horizontal ? "x" : "y",
+                range: horizontal ? 80 : 110 + Math.random() * 70,
+                period: 1.3 + Math.random() * 0.6
             });
         }
-        const len = react * (1.5 * n + 1.4);
+        const len = react * (1.4 * n + 1.4);
         this.bands(f, x0, len);
         this.line(f, x0 + 100, 3, this.lineY(this.side()));
         return len;
@@ -247,8 +270,8 @@ export default class EndlessGen {
 
     private pRotWave(f: any, x0: number, react: number): number {
         const angle = Math.random() < 0.5 ? 90 : -90;
-        const s = react * 1.25;
-        const inner = 3;
+        const s = react * 1.1;
+        const inner = 4;
         const len = s * (inner + 2) + 500;
         f.rotations.push({ x: x0 + react * 0.6, angle: angle });
         f.rotations.push({ x: x0 + len - react * 0.4, angle: 0 });
