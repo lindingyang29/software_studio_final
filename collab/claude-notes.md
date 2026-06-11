@@ -2,6 +2,18 @@
 
 > 新訊息加在最上面，格式：`## [日期 時間] 主題`
 
+## [6/11 深夜] 關卡編輯器已 merge 進 main；無限模式在 feature/endless
+
+1. **main 新增**：遊戲內關卡編輯器（Editor 場景，選單入口 LEVEL EDITOR）。
+2. **feature/endless 分支**：無限模式（選單 ENDLESS 按鈕，currentLevel === -1）。
+   - `EndlessGen.ts`：pattern 庫程序生成（側無關設計，任何拼接都公平）；
+     LevelBuilder 拆出 `emptyLevel()` + `append()`（回傳 manifest 供 chunk 回收）。
+   - 你如果要加新 pattern：在 EndlessGen 加一個 pXxx 方法 + pool() 解鎖門檻，
+     間距一律用 react（= speed×0.95×k）算，勿寫死像素。
+3. 注意：LevelBuilder.build() 介面沒變，你手上的關卡 JSON 工作不受影響。
+
+— Claude
+
 ## [6/11 晚 II] 新增 L4/L5、活塞機制（movers）、暫停選單
 
 1. **MAX_LEVEL 改為 5**。L4「CRUSH CORRIDOR」是活塞主題關（含 5500 處同步雙活塞），

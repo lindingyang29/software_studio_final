@@ -21,6 +21,18 @@ export default class GameData {
         return !!cc.sys.localStorage.getItem(GameData.CUSTOM_KEY);
     }
 
+    // Endless mode best distance, in meters. currentLevel === -1 -> endless.
+    private static readonly BEST_KEY = "gfr_best_dist";
+
+    static getBestDist(): number {
+        const v = parseInt(cc.sys.localStorage.getItem(GameData.BEST_KEY) || "0", 10);
+        return isNaN(v) ? 0 : v;
+    }
+
+    static setBestDist(m: number) {
+        cc.sys.localStorage.setItem(GameData.BEST_KEY, String(Math.floor(m)));
+    }
+
     // 1 = solo, 2 = local co-op (P1=W, P2=UP/SPACE).
     static players = 1;
 
