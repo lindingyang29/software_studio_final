@@ -5,7 +5,7 @@ import Sfx from "./Sfx";
 const { ccclass } = cc._decorator;
 
 const GRID = 25;
-const TOOLBAR_TOP = 230;   // world-y above this = toolbar zone, ignore clicks
+const TOOLBAR_LEFT = -300; // screen-x left of this = toolbar zone, ignore clicks
 const HINT_BOTTOM = -280;  // world-y below this = hint bar zone
 
 // In-game level editor. Players build a custom level with the same JSON
@@ -200,16 +200,17 @@ export default class EditorCtrl extends cc.Component {
 
     private buildToolbar() {
         // everything except the hint bar and the toggle tab lives in this
-        // container so it can be hidden to reveal the ceiling area
+        // container so it can be hidden to reveal the full play area
         this.toolbar = new cc.Node("toolbar");
         this.ui.addChild(this.toolbar);
 
+        // left-side vertical panel
         const bar = new cc.Node("bar");
         const sp = bar.addComponent(cc.Sprite);
         sp.spriteFrame = this.frames["white"];
         sp.sizeMode = cc.Sprite.SizeMode.CUSTOM;
-        bar.setContentSize(1400, 96);
-        bar.setPosition(0, 320 - 48);
+        bar.setContentSize(180, 900);
+        bar.setPosition(-394, 0);
         bar.color = cc.color(8, 10, 22);
         bar.opacity = 235;
         bar.on(cc.Node.EventType.TOUCH_START, (e: cc.Event) => e.stopPropagation());
@@ -243,11 +244,11 @@ export default class EditorCtrl extends cc.Component {
         const norm = cc.color(24, 34, 76);
         for (let i = 0; i < toolDef.length; i++) {
             const t = toolDef[i];
-            const row = i < 7 ? 0 : 1;
-            const col = i < 7 ? i : i - 7;
-            const x = -445 + col * 78;
-            const y = row === 0 ? 296 : 258;
-            this.toolButtons[t.id] = this.mkBtn(this.toolbar, t.label, x, y, 72, norm, () => {
+            const row = Math.floor(i / 2);
+            const col = i % 2;
+            const x = -437 + col * 84;
+            const y = 282 - row * 40;
+            this.toolButtons[t.id] = this.mkBtn(this.toolbar, t.label, x, y, 78, norm, () => {
                 this.tool = t.id;
                 this.pendingTeleport = null;
                 this.refreshToolbar();
@@ -255,37 +256,37 @@ export default class EditorCtrl extends cc.Component {
             });
         }
 
-        // actions on the right
-        const spdBtn = this.mkBtn(this.toolbar, "SPD:" + this.data.speed, 130, 258, 90, cc.color(40, 30, 70), () => {
+        // actions below the tool grid
+        const spdBtn = this.mkBtn(this.toolbar, "SPD:" + this.data.speed, -395, 20, 162, cc.color(40, 30, 70), () => {
             this.data.speed = this.data.speed >= 340 ? 260 : this.data.speed + 40;
             spdBtn.getChildByName("l").getComponent(cc.Label).string = "SPD:" + this.data.speed;
             Sfx.play("click", 0.6);
         });
-        this.mkBtn(this.toolbar, "SAVE", 230, 296, 80, cc.color(20, 70, 40), () => { this.save(); Sfx.play("power", 0.7); });
-        this.mkBtn(this.toolbar, "TEST", 320, 296, 80, cc.color(70, 55, 15), () => {
+        this.mkBtn(this.toolbar, "SAVE", -437, -24, 78, cc.color(20, 70, 40), () => { this.save(); Sfx.play("power", 0.7); });
+        this.mkBtn(this.toolbar, "TEST", -353, -24, 78, cc.color(70, 55, 15), () => {
             this.save();
             GameData.currentLevel = 0;
             cc.director.loadScene("Game");
         });
-        this.mkBtn(this.toolbar, "CLEAR", 230, 258, 80, cc.color(70, 25, 35), () => {
+        this.mkBtn(this.toolbar, "CLEAR", -437, -64, 78, cc.color(70, 25, 35), () => {
             this.data = this.starterData();
             this.rebuild();
             this.flashHint("CLEARED TO STARTER LEVEL");
         });
-        this.mkBtn(this.toolbar, "MENU", 320, 258, 80, cc.color(50, 50, 60), () => {
+        this.mkBtn(this.toolbar, "MENU", -353, -64, 78, cc.color(50, 50, 60), () => {
             cc.director.loadScene("Menu");
         });
 
         const tn = new cc.Node("toolLabel");
-        tn.setPosition(420, 296);
+        tn.setPosition(-395, -104);
         tn.color = cc.color(127, 247, 255);
         this.toolLabel = tn.addComponent(cc.Label);
         this.toolLabel.fontSize = 14;
         this.toolLabel.lineHeight = 16;
         this.toolbar.addChild(tn);
 
-        // always-visible toggle tab (also bound to the T key)
-        const tab = this.mkBtn(this.ui, "HIDE (T)", 430, 312, 90, cc.color(60, 70, 110), () => {
+        // always-visible toggle tab at the top-left corner (also the T key)
+        const tab = this.mkBtn(this.ui, "HIDE (T)", -430, 312, 90, cc.color(60, 70, 110), () => {
             this.toggleToolbar();
         });
         tab.setContentSize(90, 18);
@@ -354,8 +355,9 @@ export default class EditorCtrl extends cc.Component {
         return Math.round(v / GRID) * GRID;
     }
 
-    private inUiZone(y: number): boolean {
-        return (this.toolbarVisible && y > TOOLBAR_TOP) || y < HINT_BOTTOM;
+    private inUiZone(p: { x: number; y: number }): boolean {
+        const screenX = p.x - this.cameraNode.x;
+        return (this.toolbarVisible && screenX < TOOLBAR_LEFT) || p.y < HINT_BOTTOM;
     }
 
     private toggleToolbar() {
@@ -367,7 +369,7 @@ export default class EditorCtrl extends cc.Component {
 
     private onTouchStart(e: cc.Event.EventTouch) {
         const p = this.toWorld(e);
-        if (this.inUiZone(p.y)) {
+        if (this.inUiZone(p)) {
             this.dragStart = null;
             return;
         }
@@ -405,7 +407,7 @@ export default class EditorCtrl extends cc.Component {
         const start = this.dragStart;
         this.dragStart = null;
         const p = this.toWorld(e);
-        if (this.inUiZone(p.y)) return;
+        if (this.inUiZone(p)) return;
 
         if (this.tool === "floor" || this.tool === "ceiling") {
             const x0 = this.snap(Math.min(start.x, p.x));
