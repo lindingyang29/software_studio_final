@@ -327,10 +327,13 @@ export default class MenuCtrl extends cc.Component {
         n.setContentSize(w, 42);
         const eb = n.addComponent(cc.EditBox);
         eb.backgroundImage = this.frames["white"];
+        n.color = cc.color(28, 38, 80); // tints the background dark
         eb.placeholder = placeholder;
         eb.maxLength = 60;
         eb.fontSize = 18;
+        eb.fontColor = cc.color(235, 240, 255);
         eb.placeholderFontSize = 16;
+        eb.placeholderFontColor = cc.color(130, 140, 170);
         if (password) eb.inputFlag = cc.EditBox.InputFlag.PASSWORD;
         parent.addChild(n);
         return eb;
