@@ -522,6 +522,8 @@ export default class MenuCtrl extends cc.Component {
         row(120, "A   |   LEFT", "BRAKE - slow to x0.55, for timing pistons", cyan);
         row(88, "S   |   DOWN", "SLAM - instant drop while airborne", cyan);
         row(56, "R / ESC / Q", "restart / pause / quit to menu (paused)", cyan);
+        this.label(panel, "2P: P1 starts on the FLOOR, P2 on the CEILING — and you bounce off each other!",
+            0, 32, 13, dim);
 
         this.label(panel, "— PICKUPS & HAZARDS —", 0, 12, 15, dim);
         const icon = (x: number, y: number, frame: string, desc: string) => {

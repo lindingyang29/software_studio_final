@@ -51,6 +51,7 @@ export default class GameMgr extends cc.Component {
     private shakeT = 0;
     private hitStopT = 0;
     private resultPanel: cc.Node = null;
+    private bumpCd = 0;
 
     // online ghosts
     private ghosts: { [uid: string]: { node: cc.Node; tx: number; ty: number; tsy: number } } = {};
@@ -885,5 +886,48 @@ export default class GameMgr extends cc.Component {
         // rotation zones track the leading living player
         const lead = this.anyAlive();
         if (lead) this.applyRotationForX(lead.node.x, false);
+
+        // 2P: players collide elastically with each other
+        if (this.bumpCd > 0) this.bumpCd -= dt;
+        if (GameData.players === 2 && this.players.length === 2) {
+            this.playersCollide();
+        }
+    }
+
+    // Equal-mass arcade elastic collision between the two runners:
+    // separate along the shallow axis, swap vertical velocities (x0.9
+    // restitution) or trade a decaying horizontal shove.
+    private playersCollide() {
+        const a = this.players[0];
+        const b = this.players[1];
+        if (!a.alive || !b.alive) return;
+        const an = a.node;
+        const bn = b.node;
+        const W = 32, H = 36;
+        const px = W - Math.abs(an.x - bn.x);
+        if (px <= 0) return;
+        const py = H - Math.abs(an.y - bn.y);
+        if (py <= 0) return;
+
+        if (py <= px) {
+            const dir = an.y >= bn.y ? 1 : -1;
+            an.y += dir * py / 2;
+            bn.y -= dir * py / 2;
+            const va = a.getVelY();
+            const vb = b.getVelY();
+            a.setVelY(vb * 0.9);
+            b.setVelY(va * 0.9);
+        } else {
+            const dirx = an.x >= bn.x ? 1 : -1;
+            an.x += dirx * px / 2;
+            bn.x -= dirx * px / 2;
+            a.addPushX(dirx * 160);
+            b.addPushX(-dirx * 160);
+        }
+        if (this.bumpCd <= 0) {
+            this.bumpCd = 0.15;
+            Sfx.play("click", 0.5);
+            Fx.crystal(this.world, (an.x + bn.x) / 2, (an.y + bn.y) / 2, cc.color(200, 220, 255));
+        }
     }
 }
