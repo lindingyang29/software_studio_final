@@ -1,0 +1,12 @@
+# SoftStone is the old Mario lab project (own git repo, reference only)
+SoftStone/
+
+# Cocos Creator generated folders
+GravityRunner/library/
+GravityRunner/temp/
+GravityRunner/local/
+GravityRunner/build/
+
+node_modules/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-ChildItem -Recurse \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\SoftStone\\\\assets\" -File | Where-Object { $_.Extension -ne '.meta' } | Select-Object @{N='Path';E={$_.FullName.Replace\\('C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\SoftStone\\\\assets\\\\',''\\)}}, @{N='KB';E={[math]::Round\\($_.Length/1KB,1\\)}} | Format-Table -AutoSize)",
+      "PowerShell(Get-Content \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\SoftStone\\\\assets\\\\scenes\\\\Level1.fire.meta\"; node --version)",
+      "PowerShell(node \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\tools\\\\gen-uuids.js\")",
+      "PowerShell(Copy-Item *)",
+      "PowerShell(powershell -ExecutionPolicy Bypass -File \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\tools\\\\gen-art.ps1\"; node \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\tools\\\\gen-sfx.js\")"
+    ]
+  }
+}
