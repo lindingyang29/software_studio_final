@@ -122,7 +122,7 @@ export default class MenuCtrl extends cc.Component {
     }
 
     private progressSig(): string {
-        return GameData.getUnlocked() + "|" + GameData.getBestDist() + "|" + Fb.activeSlot;
+        return GameData.getUnlocked() + "|" + GameData.getBestDist();
     }
 
     private rebuildUi() {
@@ -768,9 +768,8 @@ export default class MenuCtrl extends cc.Component {
     private refreshAccount() {
         if (this.accountLabel && this.accountLabel.isValid) {
             const lb = this.accountLabel.getComponent(cc.Label);
-            const slot = Fb.activeSlotName();
             lb.string = !Fb.enabled() ? "OFFLINE MODE"
-                : Fb.user() ? "PLAYER: " + Fb.userName() + (slot ? "  [" + slot + "]" : "")
+                : Fb.user() ? "PLAYER: " + Fb.userName()
                 : "NOT LOGGED IN";
         }
         if (this.accountStatus && this.accountStatus.isValid) {
@@ -921,7 +920,7 @@ export default class MenuCtrl extends cc.Component {
         });
     }
 
-    // ---------- save slots panel ----------
+    // ---------- save states panel (mid-run saves; saving happens in-game) ----------
 
     private toggleSaves() {
         if (this.savesPanel) {
@@ -929,22 +928,75 @@ export default class MenuCtrl extends cc.Component {
             return;
         }
         this.closePanels();
-        this.buildSavesPanel();
+        this.buildSavesPanel(-1);
     }
 
-    private buildSavesPanel() {
+    // confirmIdx: slot whose DEL is in the two-click "SURE?" stage
+    private buildSavesPanel(confirmIdx: number) {
+        if (this.savesPanel) { this.savesPanel.destroy(); this.savesPanel = null; }
         const white = cc.color(235, 240, 255);
         const orange = cc.color(255, 181, 74);
-        const cyan = cc.color(127, 247, 255);
         const dim = cc.color(110, 120, 150);
 
-        const panel = this.sprite(this.node, "white", 0, 0, 620, 540, cc.color(10, 12, 26));
+        const panel = this.sprite(this.node, "white", 0, 0, 660, 540, cc.color(10, 12, 26));
         panel.opacity = 248;
         panel.zIndex = 50;
         panel.on(cc.Node.EventType.TOUCH_START, (e: cc.Event) => e.stopPropagation());
         this.savesPanel = panel;
 
-        this.label(panel, "SAVE SLOTS  (" + Fb.slotIds().length + "/8)", 0, 240, 26, orange);
+        this.label(panel, "SAVE STATES", 0, 240, 26, orange);
+        this.label(panel, Fb.user()
+            ? "stored in your account — save from the in-game PAUSE menu"
+            : "stored on this device — save from the in-game PAUSE menu", 0, 208, 13, dim);
+
+        const states = Fb.getStates();
+        let any = false;
+        for (let i = 0; i < Fb.MAX_STATES; i++) {
+            const st = states[i];
+            const y = 158 - i * 56;
+            const row = this.sprite(panel, "white", 0, y, 620, 46, cc.color(22, 30, 60));
+            let text = "#" + (i + 1) + "   ";
+            if (st) {
+                any = true;
+                const d = new Date(st.t || 0);
+                const pad = (v: number) => (v < 10 ? "0" + v : "" + v);
+                text += st.label + "   " + (d.getMonth() + 1) + "/" + d.getDate() + " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
+            } else {
+                text += "EMPTY";
+            }
+            this.label(row, text, -296, 0, 15, st ? white : dim, 0);
+            if (!st) continue;
+
+            const mk = (txt: string, x: number, color: cc.Color, cb: () => void) => {
+                const b = this.sprite(row, "white", x, 0, 84, 32, color);
+                this.label(b, txt, 0, 0, 13, white);
+                b.on(cc.Node.EventType.TOUCH_END, (e: cc.Event) => {
+                    e.stopPropagation();
+                    Sfx.play("click", 0.7);
+                    cb();
+                });
+            };
+            const idx = i;
+            mk("PLAY", 170, cc.color(20, 70, 40), () => {
+                GameData.players = st.pl || 1;
+                GameData.currentLevel = st.lv || 1;
+                GameData.currentLevelPath = st.path || "";
+                GameData.pendingState = st;
+                Fx.fadeTo("Game", this.node);
+            });
+            if (confirmIdx === idx) {
+                mk("SURE?", 265, cc.color(140, 40, 40), () => {
+                    Fb.saveState(idx, null);
+                    this.buildSavesPanel(-1);
+                });
+            } else {
+                mk("DEL", 265, cc.color(70, 25, 35), () => this.buildSavesPanel(idx));
+            }
+        }
+        if (!any) {
+            this.label(panel, "no save states yet — pause during a level and pick SAVE / LOAD STATE",
+                0, -190, 14, dim);
+        }
 
         const closeBtn = this.sprite(panel, "white", 0, -240, 160, 38, cc.color(50, 50, 60));
         this.label(closeBtn, "CLOSE", 0, 0, 17, white);
@@ -952,71 +1004,6 @@ export default class MenuCtrl extends cc.Component {
             Sfx.play("click", 0.8);
             this.closePanels();
         });
-
-        if (!Fb.user()) {
-            this.label(panel, "log in first (ACCOUNT panel)", 0, 40, 18, white);
-            return;
-        }
-
-        const nameEb = this.editBox(panel, -90, 196, 300, "slot name (for NEW / REN)", false);
-        const status = this.label(panel, "", 0, -205, 15, orange);
-        const say = (s: string) => { (status.getComponent(cc.Label)).string = s || ""; };
-
-        const newBtn = this.sprite(panel, "white", 180, 196, 130, 40, cc.color(20, 70, 40));
-        this.label(newBtn, "+ NEW", 0, 0, 16, white);
-        newBtn.on(cc.Node.EventType.TOUCH_END, () => {
-            Sfx.play("click", 0.8);
-            const err = Fb.createSlot(nameEb.string.trim());
-            if (err) { say(err); return; }
-            this.refreshAccount();
-            this.closePanels();
-            this.buildSavesPanel(); // re-render list
-        });
-
-        const ids = Fb.slotIds();
-        for (let i = 0; i < ids.length; i++) {
-            const id = ids[i];
-            const s = Fb.slots[id];
-            const active = id === Fb.activeSlot;
-            const y = 150 - i * 44;
-            const row = this.sprite(panel, "white", 0, y, 580, 38,
-                active ? cc.color(30, 60, 90) : cc.color(22, 30, 60));
-            this.label(row, (active ? "> " : "") + s.name, -270, 0, 16, active ? cyan : white, 0);
-            this.label(row, "Lv" + s.unlocked + "   " + s.best + "m", -60, 0, 14, dim, 0);
-            const mk = (text: string, x: number, color: cc.Color, cb: () => void) => {
-                const b = this.sprite(row, "white", x, 0, 62, 28, color);
-                this.label(b, text, 0, 0, 12, white);
-                b.on(cc.Node.EventType.TOUCH_END, (e: cc.Event) => {
-                    e.stopPropagation();
-                    Sfx.play("click", 0.7);
-                    cb();
-                });
-            };
-            mk("LOAD", 120, cc.color(20, 70, 40), () => {
-                const err = Fb.loadSlot(id);
-                if (err) { say(err); return; }
-                // reload the menu so level locks / endless best reflect the slot
-                cc.director.loadScene("Menu");
-            });
-            mk("SAVE", 190, cc.color(70, 55, 15), () => {
-                const err = Fb.overwriteSlot(id);
-                say(err ? err : "current progress saved to \"" + s.name + "\"");
-                this.refreshAccount();
-                this.closePanels();
-                this.buildSavesPanel();
-            });
-            mk("REN", 258, cc.color(40, 30, 70), () => {
-                const err = Fb.renameSlot(id, nameEb.string.trim());
-                if (err) { say(err); return; }
-                this.refreshAccount();
-                this.closePanels();
-                this.buildSavesPanel();
-            });
-        }
-
-        this.label(panel,
-            "LOAD = play this slot     SAVE = overwrite slot with current progress     REN = rename",
-            0, -175, 13, dim);
     }
 
     private toggleBoard() {

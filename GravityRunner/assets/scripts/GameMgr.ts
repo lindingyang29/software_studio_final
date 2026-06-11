@@ -1447,7 +1447,7 @@ export default class GameMgr extends cc.Component {
                             y: Math.round(me.node.y),
                             sy: me.node.scaleY < 0 ? -1 : 1,
                             lv: this.liveLevelKey(),
-                            n: Fb.userName() + (Fb.activeSlotName() ? ":" + Fb.activeSlotName() : ""),
+                            n: Fb.userName(),
                             t: Date.now()
                         });
                     }
