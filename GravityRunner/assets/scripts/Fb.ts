@@ -36,6 +36,12 @@ export default class Fb {
     static slots: { [id: string]: SaveSlot } = {};
     static activeSlot = "";
 
+    // Mid-run save states (6 fixed slots; null = empty). Cloud when logged
+    // in, localStorage otherwise.
+    static readonly MAX_STATES = 6;
+    private static states: any[] = [null, null, null, null, null, null];
+    private static readonly STATES_KEY = "gfr_states";
+
     // Single UI callback (the menu re-registers itself each time it loads).
     static onChanged: () => void = null;
 
@@ -180,6 +186,12 @@ export default class Fb {
             .then((snap: any) => {
                 const v = snap.val();
                 Fb.slots = {};
+                Fb.states = [null, null, null, null, null, null];
+                if (v && v.states) {
+                    for (let i = 0; i < Fb.MAX_STATES; i++) {
+                        if (v.states[i]) Fb.states[i] = v.states[i];
+                    }
+                }
                 if (v && v.slots) {
                     let newest = "";
                     for (const id in v.slots) {
@@ -216,13 +228,18 @@ export default class Fb {
             .catch(() => { /* offline: keep local */ });
     }
 
-    // Write everything (slots + active + leaderboard mirror) to the cloud.
+    // Write everything (slots + active + states + leaderboard mirror) to the cloud.
     private static pushAll() {
         if (!Fb.ready() || !Fb.authUser || !Fb.activeSlot) return;
         const db = Fb.sdk().database();
+        const statesObj: any = {};
+        for (let i = 0; i < Fb.MAX_STATES; i++) {
+            if (Fb.states[i]) statesObj[i] = Fb.states[i];
+        }
         db.ref("saves/" + Fb.authUser.uid).set({
             slots: Fb.slots,
-            active: Fb.activeSlot
+            active: Fb.activeSlot,
+            states: statesObj
         });
         const board: any = {};
         for (const id in Fb.slots) {
@@ -269,6 +286,35 @@ export default class Fb {
         Fb.applySlotToLocal(id);
         Fb.pushAll();
         return null;
+    }
+
+    // ---------- mid-run save states ----------
+
+    private static localStates(): any[] {
+        try {
+            const arr = JSON.parse(cc.sys.localStorage.getItem(Fb.STATES_KEY) || "[]");
+            const out = [null, null, null, null, null, null];
+            for (let i = 0; i < Fb.MAX_STATES; i++) out[i] = arr[i] || null;
+            return out;
+        } catch (e) {
+            return [null, null, null, null, null, null];
+        }
+    }
+
+    static getStates(): any[] {
+        return Fb.user() ? Fb.states : Fb.localStates();
+    }
+
+    static saveState(i: number, st: any) {
+        if (i < 0 || i >= Fb.MAX_STATES) return;
+        if (Fb.user()) {
+            Fb.states[i] = st;
+            Fb.pushAll();
+        } else {
+            const arr = Fb.localStates();
+            arr[i] = st;
+            cc.sys.localStorage.setItem(Fb.STATES_KEY, JSON.stringify(arr));
+        }
     }
 
     static renameSlot(id: string, name: string): string {

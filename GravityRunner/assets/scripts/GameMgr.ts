@@ -173,6 +173,176 @@ export default class GameMgr extends cc.Component {
         this.state = "ready";
         this.setMsg(this.isRhythmLevel() ? "PRESS RHYTHM KEY TO START" : "PRESS SPACE TO RUN", this.controlsHint());
         this.startLive();
+        // resume a mid-run save state, if one was loaded from the pause menu
+        if (GameData.pendingState) {
+            const ps = GameData.pendingState;
+            GameData.pendingState = null;
+            if (!this.endless && !this.isRhythmLevel()) this.applyState(ps);
+        }
+    }
+
+    // ---------- mid-run save states (6 slots, pause menu) ----------
+
+    private statePanel: cc.Node = null;
+
+    private stateSavable(): boolean {
+        return !this.endless && !this.isRhythmLevel() && this.players.length > 0;
+    }
+
+    private captureState(): any {
+        const p0 = this.players[0];
+        const takenC: number[] = [];
+        for (let i = 0; i < this.level.crystals.length; i++) {
+            if (this.level.crystals[i].taken) takenC.push(i);
+        }
+        const takenP: number[] = [];
+        for (let i = 0; i < this.level.powerups.length; i++) {
+            if (this.level.powerups[i].taken) takenP.push(i);
+        }
+        const st: any = {
+            lv: GameData.currentLevel,
+            path: GameData.currentLevelPath || null,
+            pl: GameData.players,
+            x: Math.round(p0.node.x),
+            y: Math.round(p0.node.y),
+            g: p0.getGravityDir(),
+            time: Math.round(this.time * 10) / 10,
+            deaths: this.deaths,
+            crystals: this.crystalsTaken,
+            takenC: takenC,
+            takenP: takenP,
+            label: (GameData.currentLevel === 0 ? "CUSTOM" : "L" + GameData.currentLevel)
+                + "  " + this.formatTime(this.time)
+                + "  x" + Math.round(p0.node.x)
+                + (GameData.players === 2 ? "  [2P]" : ""),
+            t: Date.now()
+        };
+        if (GameData.players === 2 && this.players[1]) {
+            const p1 = this.players[1];
+            st.p2 = { x: Math.round(p1.node.x), y: Math.round(p1.node.y), g: p1.getGravityDir() };
+        }
+        return st;
+    }
+
+    private applyState(ps: any) {
+        const norm = (v: any): any[] => !v ? [] : (Array.isArray(v) ? v : Object.keys(v).map((k) => v[k]));
+        const p0 = this.players[0];
+        p0.respawnAt(ps.x || 0, ps.y || 0, ps.g || -1);
+        if (ps.p2 && this.players[1]) {
+            this.players[1].respawnAt(ps.p2.x || 0, ps.p2.y || 0, ps.p2.g || -1);
+        }
+        this.time = ps.time || 0;
+        this.deaths = ps.deaths || 0;
+        this.crystalsTaken = ps.crystals || 0;
+        for (const i of norm(ps.takenC)) {
+            const c = this.level.crystals[i];
+            if (c) { c.taken = true; c.node.active = false; }
+        }
+        for (const i of norm(ps.takenP)) {
+            const pu = this.level.powerups[i];
+            if (pu) { pu.taken = true; pu.node.active = false; }
+        }
+        this.applyRotationForX(ps.x || 0, true);
+        const follow = this.cameraNode.getComponent(CameraFollow);
+        if (follow) follow.snap();
+        this.refreshHud();
+        this.setMsg("PRESS SPACE TO RESUME", this.controlsHint());
+    }
+
+    private closeStatePanel() {
+        if (this.statePanel) {
+            this.statePanel.destroy();
+            this.statePanel = null;
+        }
+    }
+
+    // confirmIdx: slot whose SAVE is in the two-click "SURE?" stage
+    private buildStatePanel(confirmIdx: number = -1) {
+        this.closeStatePanel();
+        const panel = new cc.Node("StatePanel");
+        this.hud.addChild(panel, 30);
+        this.statePanel = panel;
+
+        const mkSprite = (parent: cc.Node, w: number, h: number, x: number, y: number, color: cc.Color, opacity: number) => {
+            const n = new cc.Node("s");
+            const sp = n.addComponent(cc.Sprite);
+            sp.spriteFrame = this.frames["white"];
+            sp.sizeMode = cc.Sprite.SizeMode.CUSTOM;
+            n.setContentSize(w, h);
+            n.setPosition(x, y);
+            n.color = color;
+            n.opacity = opacity;
+            parent.addChild(n);
+            return n;
+        };
+
+        const box = mkSprite(panel, 640, 480, 0, 0, cc.color(10, 12, 26), 250);
+        box.on(cc.Node.EventType.TOUCH_START, (e: cc.Event) => e.stopPropagation());
+        const title = this.makeLabel(panel, 0, 210, 26, cc.color(255, 181, 74));
+        title.string = "SAVE / LOAD STATE";
+        const sub = this.makeLabel(panel, 0, 180, 13, cc.color(110, 120, 150));
+        sub.string = Fb.user() ? "stored in your account" : "stored on this device (log in to sync)";
+
+        const states = Fb.getStates();
+        for (let i = 0; i < Fb.MAX_STATES; i++) {
+            const st = states[i];
+            const y = 130 - i * 52;
+            const row = mkSprite(panel, 600, 44, 0, y, cc.color(22, 30, 60), 255);
+            let text = "#" + (i + 1) + "   ";
+            if (st) {
+                const d = new Date(st.t || 0);
+                const pad = (v: number) => (v < 10 ? "0" + v : "" + v);
+                text += st.label + "   " + (d.getMonth() + 1) + "/" + d.getDate() + " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
+            } else {
+                text += "EMPTY";
+            }
+            const lb = this.makeLabel(row, -288, 0, 15, st ? cc.color(235, 240, 255) : cc.color(110, 120, 150), 0);
+            lb.string = text;
+
+            const mkBtn2 = (txt: string, x: number, color: cc.Color, cb: () => void) => {
+                const b = mkSprite(row, 84, 32, x, 0, color, 255);
+                const blb = this.makeLabel(b, 0, 0, 13, cc.color(235, 240, 255));
+                blb.string = txt;
+                b.on(cc.Node.EventType.TOUCH_END, (e: cc.Event) => {
+                    e.stopPropagation();
+                    Sfx.play("click", 0.7);
+                    cb();
+                });
+            };
+            const idx = i;
+            if (st && confirmIdx !== idx) {
+                // occupied: first SAVE click asks for overwrite confirmation
+                mkBtn2("SAVE", 160, cc.color(70, 55, 15), () => this.buildStatePanel(idx));
+            } else if (st && confirmIdx === idx) {
+                mkBtn2("SURE?", 160, cc.color(140, 40, 40), () => {
+                    Fb.saveState(idx, this.captureState());
+                    this.buildStatePanel();
+                });
+            } else {
+                mkBtn2("SAVE", 160, cc.color(20, 70, 40), () => {
+                    Fb.saveState(idx, this.captureState());
+                    this.buildStatePanel();
+                });
+            }
+            if (st) {
+                mkBtn2("LOAD", 255, cc.color(24, 34, 76), () => {
+                    GameData.players = st.pl || 1;
+                    GameData.currentLevel = st.lv || 1;
+                    GameData.currentLevelPath = st.path || "";
+                    GameData.pendingState = st;
+                    Fx.fadeTo("Game", this.hud);
+                });
+            }
+        }
+
+        const closeB = mkSprite(panel, 160, 38, 0, -208, cc.color(50, 50, 60), 255);
+        const clb = this.makeLabel(closeB, 0, 0, 15, cc.color(235, 240, 255));
+        clb.string = "CLOSE";
+        closeB.on(cc.Node.EventType.TOUCH_END, (e: cc.Event) => {
+            e.stopPropagation();
+            Sfx.play("click", 0.7);
+            this.closeStatePanel();
+        });
     }
 
     // ---------- online ghosts ----------
@@ -628,9 +798,13 @@ export default class GameMgr extends cc.Component {
         mkBtn("RESUME  (SPACE)", 40, () => this.togglePause());
         mkBtn("RESTART  (R)", -30, () => this.fullRestart());
         mkBtn("MAIN MENU  (Q)", -100, () => Fx.fadeTo("Menu", this.hud));
+        if (this.stateSavable()) {
+            mkBtn("SAVE / LOAD STATE", -170, () => this.buildStatePanel());
+        }
     }
 
     private closePauseMenu() {
+        this.closeStatePanel();
         if (this.pausePanel) {
             this.pausePanel.destroy();
             this.pausePanel = null;
