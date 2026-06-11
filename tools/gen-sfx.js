@@ -103,3 +103,48 @@ function seconds(t) { return Math.floor(SR * t); }
   }
   writeWav("click.wav", s);
 }
+
+// power: warm rising triad blip
+{
+  const n = seconds(0.22);
+  const s = new Array(n).fill(0);
+  const notes = [440, 554, 659];
+  for (let k = 0; k < notes.length; k++) {
+    const start = seconds(0.05 * k);
+    for (let i = 0; start + i < n; i++) {
+      const t = i / SR;
+      s[start + i] += Math.sin(2 * Math.PI * notes[k] * t) * Math.exp(-t * 14) * 0.3;
+    }
+  }
+  writeWav("power.wav", s);
+}
+
+// teleport: fast down-then-up glissando, slightly metallic
+{
+  const n = seconds(0.25);
+  const s = new Array(n);
+  for (let i = 0; i < n; i++) {
+    const t = i / SR;
+    const f = t < 0.12 ? 900 - 4500 * t : 360 + 5200 * (t - 0.12);
+    const ph = 2 * Math.PI * f * t;
+    const env = Math.sin(Math.PI * t / 0.25);
+    s[i] = (Math.sin(ph) * 0.7 + Math.sin(ph * 2.01) * 0.3) * env * 0.45;
+  }
+  writeWav("teleport.wav", s);
+}
+
+// shieldbreak: glassy crack — short noise burst with ringing high tone
+{
+  const n = seconds(0.28);
+  const s = new Array(n);
+  let last = 0;
+  for (let i = 0; i < n; i++) {
+    const t = i / SR;
+    const noise = (Math.random() * 2 - 1);
+    last = last * 0.4 + noise * 0.6; // bright noise
+    const ring = Math.sin(2 * Math.PI * 1900 * t) * Math.exp(-t * 16);
+    const env = Math.pow(1 - t / 0.28, 1.6);
+    s[i] = (last * 0.4 * env + ring * 0.4) * 0.6;
+  }
+  writeWav("shieldbreak.wav", s);
+}

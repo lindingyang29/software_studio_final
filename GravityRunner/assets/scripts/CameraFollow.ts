@@ -18,6 +18,10 @@ export default class CameraFollow extends cc.Component {
         this.node.y = 0;
     }
 
+    setTarget(target: cc.Node) {
+        this.target = target;
+    }
+
     snap() {
         if (!this.target) return;
         this.node.x = this.clampX(this.target.x + this.lookAhead);

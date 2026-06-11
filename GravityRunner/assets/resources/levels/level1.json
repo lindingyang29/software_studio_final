@@ -11,6 +11,10 @@
     { "x": -500, "w": 8700, "side": "ceiling" }
   ],
   "platforms": [],
+  "powerups": [
+    { "x": 3050, "y": -212, "type": "magnet" },
+    { "x": 6900, "y": -212, "type": "shield" }
+  ],
   "spikes": [
     { "x": 1000, "side": "floor" },
     { "x": 1700, "side": "ceiling" },

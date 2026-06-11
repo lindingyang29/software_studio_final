@@ -106,5 +106,85 @@ for ($i = 0; $i -lt 90; $i++) {
 }
 $g.Dispose(); $bmp.Save("$out\bg.png", [System.Drawing.Imaging.ImageFormat]::Png); $bmp.Dispose()
 
+# ---- player2.png : 40x40 orange runner cube (P2) ----
+$bmp, $g = New-Canvas 40 40
+$body = New-Object System.Drawing.SolidBrush (C 255 255 150 50)
+$g.FillRectangle($body, 3, 3, 34, 34)
+$edge = New-Object System.Drawing.Pen (C 255 255 220 150), 3
+$g.DrawRectangle($edge, 3, 3, 34, 34)
+$visor = New-Object System.Drawing.SolidBrush (C 255 255 250 230)
+$g.FillRectangle($visor, 18, 10, 14, 7)
+$dark = New-Object System.Drawing.SolidBrush (C 255 110 50 10)
+$g.FillRectangle($dark, 8, 24, 24, 8)
+$g.Dispose(); $bmp.Save("$out\player2.png", [System.Drawing.Imaging.ImageFormat]::Png); $bmp.Dispose()
+
+# ---- drone.png : 36x36 red patrol drone (cross blades + core) ----
+$bmp, $g = New-Canvas 36 36
+$blade = New-Object System.Drawing.SolidBrush (C 255 255 80 80)
+$g.FillRectangle($blade, 15, 1, 6, 34)
+$g.FillRectangle($blade, 1, 15, 34, 6)
+$rot = New-Object System.Drawing.Drawing2D.Matrix
+$rot.RotateAt(45, (New-Object System.Drawing.PointF 18, 18))
+$g.Transform = $rot
+$blade2 = New-Object System.Drawing.SolidBrush (C 200 255 120 90)
+$g.FillRectangle($blade2, 15, 3, 6, 30)
+$g.FillRectangle($blade2, 3, 15, 30, 6)
+$g.ResetTransform()
+$core = New-Object System.Drawing.SolidBrush (C 255 120 10 30)
+$g.FillEllipse($core, 9, 9, 18, 18)
+$corePen = New-Object System.Drawing.Pen (C 255 255 200 200), 2
+$g.DrawEllipse($corePen, 9, 9, 18, 18)
+$g.Dispose(); $bmp.Save("$out\drone.png", [System.Drawing.Imaging.ImageFormat]::Png); $bmp.Dispose()
+
+# ---- shield.png : 54x54 cyan ring (also the on-player effect) ----
+$bmp, $g = New-Canvas 54 54
+$pen = New-Object System.Drawing.Pen (C 230 120 220 255), 4
+$g.DrawEllipse($pen, 4, 4, 46, 46)
+$pen2 = New-Object System.Drawing.Pen (C 120 200 240 255), 2
+$g.DrawEllipse($pen2, 9, 9, 36, 36)
+$g.Dispose(); $bmp.Save("$out\shield.png", [System.Drawing.Imaging.ImageFormat]::Png); $bmp.Dispose()
+
+# ---- slow.png : 34x34 purple hourglass ----
+$bmp, $g = New-Canvas 34 34
+$fill = New-Object System.Drawing.SolidBrush (C 255 170 140 255)
+$top = @(
+    (New-Object System.Drawing.PointF 5, 3),
+    (New-Object System.Drawing.PointF 29, 3),
+    (New-Object System.Drawing.PointF 17, 17)
+)
+$bot = @(
+    (New-Object System.Drawing.PointF 17, 17),
+    (New-Object System.Drawing.PointF 5, 31),
+    (New-Object System.Drawing.PointF 29, 31)
+)
+$g.FillPolygon($fill, $top)
+$g.FillPolygon($fill, $bot)
+$pen = New-Object System.Drawing.Pen (C 255 240 230 255), 2
+$g.DrawPolygon($pen, $top)
+$g.DrawPolygon($pen, $bot)
+$g.Dispose(); $bmp.Save("$out\slow.png", [System.Drawing.Imaging.ImageFormat]::Png); $bmp.Dispose()
+
+# ---- magnet.png : 34x34 yellow U-magnet ----
+$bmp, $g = New-Canvas 34 34
+$pen = New-Object System.Drawing.Pen (C 255 255 230 110), 8
+$pen.StartCap = [System.Drawing.Drawing2D.LineCap]::Flat
+$g.DrawArc($pen, 6, 6, 22, 22, 180, 180)
+$g.DrawLine($pen, 7, 17, 7, 28)
+$g.DrawLine($pen, 27, 17, 27, 28)
+$tip = New-Object System.Drawing.SolidBrush (C 255 240 240 250)
+$g.FillRectangle($tip, 3, 26, 9, 6)
+$g.FillRectangle($tip, 23, 26, 9, 6)
+$g.Dispose(); $bmp.Save("$out\magnet.png", [System.Drawing.Imaging.ImageFormat]::Png); $bmp.Dispose()
+
+# ---- tport.png : 52x52 swirl (teleporter) ----
+$bmp, $g = New-Canvas 52 52
+$pen = New-Object System.Drawing.Pen (C 255 255 255 255), 5
+$g.DrawArc($pen, 4, 4, 44, 44, 0, 250)
+$pen2 = New-Object System.Drawing.Pen (C 220 255 255 255), 3
+$g.DrawArc($pen2, 13, 13, 26, 26, 120, 250)
+$core = New-Object System.Drawing.SolidBrush (C 255 255 255 255)
+$g.FillEllipse($core, 22, 22, 8, 8)
+$g.Dispose(); $bmp.Save("$out\tport.png", [System.Drawing.Imaging.ImageFormat]::Png); $bmp.Dispose()
+
 Write-Output "art done"
 Get-ChildItem $out -Filter *.png | Select-Object Name, Length

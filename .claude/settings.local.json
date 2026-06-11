@@ -5,7 +5,9 @@
       "PowerShell(Get-Content \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\SoftStone\\\\assets\\\\scenes\\\\Level1.fire.meta\"; node --version)",
       "PowerShell(node \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\tools\\\\gen-uuids.js\")",
       "PowerShell(Copy-Item *)",
-      "PowerShell(powershell -ExecutionPolicy Bypass -File \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\tools\\\\gen-art.ps1\"; node \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\tools\\\\gen-sfx.js\")"
+      "PowerShell(powershell -ExecutionPolicy Bypass -File \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\tools\\\\gen-art.ps1\"; node \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\tools\\\\gen-sfx.js\")",
+      "PowerShell(powershell -ExecutionPolicy Bypass -File \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\tools\\\\gen-art.ps1\"; node \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\tools\\\\gen-sfx.js\"; Set-Location \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\GravityRunner\"; npx --yes -p typescript@4.9.5 tsc --noEmit -p tsconfig.json; Write-Output \"TSC_EXIT=$LASTEXITCODE\")",
+      "PowerShell(Set-Location \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\GravityRunner\"; npx --yes -p typescript@4.9.5 tsc --noEmit -p tsconfig.json; Write-Output \"TSC_EXIT=$LASTEXITCODE\")"
     ]
   }
 }

@@ -15,6 +15,7 @@ const BODY_H = 34;
 @ccclass
 export default class Player extends cc.Component {
     alive = true;
+    index = 0; // 0 = P1, 1 = P2
 
     private mgr: GameMgr = null;
     private level: LevelData = null;
@@ -22,24 +23,74 @@ export default class Player extends cc.Component {
     private gravityDir = -1; // -1: pulls toward floor, +1: toward ceiling
     private grounded = false;
 
-    init(mgr: GameMgr, level: LevelData) {
+    // power-up state
+    private shield = false;
+    private magnetT = 0;
+    private invincibleT = 0;
+
+    private shieldNode: cc.Node = null;
+
+    init(mgr: GameMgr, level: LevelData, index: number, shieldFrame: cc.SpriteFrame) {
         this.mgr = mgr;
         this.level = level;
+        this.index = index;
+
+        this.shieldNode = new cc.Node("shieldFx");
+        const sp = this.shieldNode.addComponent(cc.Sprite);
+        sp.spriteFrame = shieldFrame;
+        sp.sizeMode = cc.Sprite.SizeMode.CUSTOM;
+        this.shieldNode.setContentSize(54, 54);
+        this.shieldNode.active = false;
+        this.node.addChild(this.shieldNode, 1);
+
         this.reset();
     }
 
     reset() {
         this.node.stopAllActions();
-        this.node.setPosition(this.level.start.x, this.level.start.y);
+        // P2 trails slightly behind so the cubes don't overlap
+        this.node.setPosition(this.level.start.x - this.index * 60, this.level.start.y);
         this.vy = 0;
         this.gravityDir = -1;
         this.grounded = true;
         this.alive = true;
+        this.shield = false;
+        this.magnetT = 0;
+        this.invincibleT = 0;
+        this.shieldNode.active = false;
         this.node.active = true;
         this.node.opacity = 255;
         this.node.scaleX = 1;
         this.node.scaleY = 1;
         this.node.angle = 0;
+    }
+
+    // Co-op revive: drop in next to the surviving partner.
+    respawnAt(x: number, y: number, gravityDir: number) {
+        this.node.stopAllActions();
+        this.node.setPosition(x, y);
+        this.vy = 0;
+        this.gravityDir = gravityDir;
+        this.grounded = false;
+        this.alive = true;
+        this.shield = false;
+        this.magnetT = 0;
+        this.shieldNode.active = false;
+        this.node.active = true;
+        this.node.opacity = 255;
+        this.node.scaleX = 1;
+        this.node.scaleY = this.gravityDir > 0 ? -1 : 1;
+        this.node.angle = 0;
+        this.setInvincible(1.5);
+    }
+
+    setInvincible(seconds: number) {
+        this.invincibleT = seconds;
+        this.node.stopAllActions();
+        cc.tween(this.node)
+            .repeat(Math.ceil(seconds / 0.3),
+                cc.tween().to(0.15, { opacity: 90 }).to(0.15, { opacity: 255 }))
+            .start();
     }
 
     flip() {
@@ -50,9 +101,23 @@ export default class Player extends cc.Component {
         Sfx.play("flip", 0.8);
     }
 
-    update(dt: number) {
+    applyPower(type: string) {
+        if (type === "shield") {
+            this.shield = true;
+            this.shieldNode.active = true;
+        } else if (type === "magnet") {
+            this.magnetT = 5;
+        } else if (type === "slow") {
+            this.mgr.applySlow(4, 0.55);
+        }
+        Sfx.play("power", 0.9);
+    }
+
+    update(rawDt: number) {
         if (!this.alive || !this.mgr || !this.mgr.isRunning()) return;
-        dt = Math.min(dt, 1 / 30); // avoid tunneling after a hitch
+        const dt = Math.min(rawDt, 1 / 30) * this.mgr.timeScale;
+        if (this.invincibleT > 0) this.invincibleT -= rawDt;
+        if (this.magnetT > 0) this.magnetT -= rawDt;
 
         const n = this.node;
         n.x += this.level.speed * dt;
@@ -78,13 +143,26 @@ export default class Player extends cc.Component {
                 const dirx = n.x >= r.x ? 1 : -1;
                 n.x += dirx * px;
                 if (dirx < 0 && px > 6) {
-                    this.die();
-                    return;
+                    this.hit("wall");
+                    if (!this.alive) return;
                 }
             }
         }
 
-        // fell/flew out of the corridor through a gap
+        // teleporters (one-way, exits are always forward so no re-trigger)
+        for (const t of this.level.teleports) {
+            if (Math.abs(n.x - t.x) < 30 && Math.abs(n.y - t.y) < 30) {
+                n.setPosition(t.tx, t.ty);
+                this.vy = 0;
+                this.gravityDir = t.ty >= 0 ? 1 : -1;
+                this.grounded = false;
+                this.node.scaleY = this.gravityDir > 0 ? -1 : 1;
+                Sfx.play("teleport", 0.9);
+                break;
+            }
+        }
+
+        // fell/flew out of the corridor through a gap (shield can't save this)
         if (Math.abs(n.y) > 520) {
             this.die();
             return;
@@ -93,17 +171,37 @@ export default class Player extends cc.Component {
         // spikes (slightly forgiving hitbox)
         for (const s of this.level.spikes) {
             if (this.overlaps(s, -8)) {
-                this.die();
-                return;
+                this.hit("spike");
+                if (!this.alive) return;
+                break;
             }
         }
 
-        // crystals
+        // patrol drones
+        for (const e of this.level.enemies) {
+            if (Math.abs(n.x - e.node.x) < 32 && Math.abs(n.y - e.node.y) < 32) {
+                this.hit("enemy");
+                if (!this.alive) return;
+                break;
+            }
+        }
+
+        // crystals (magnet widens the pickup radius)
+        const reach = this.magnetT > 0 ? 130 : 36;
         for (const c of this.level.crystals) {
-            if (!c.taken && Math.abs(n.x - c.x) < 36 && Math.abs(n.y - c.y) < 36) {
+            if (!c.taken && Math.abs(n.x - c.x) < reach && Math.abs(n.y - c.y) < reach) {
                 c.taken = true;
                 c.node.active = false;
                 this.mgr.onCrystal();
+            }
+        }
+
+        // powerups
+        for (const p of this.level.powerups) {
+            if (!p.taken && Math.abs(n.x - p.x) < 36 && Math.abs(n.y - p.y) < 36) {
+                p.taken = true;
+                p.node.active = false;
+                this.applyPower(p.type);
             }
         }
 
@@ -120,9 +218,25 @@ export default class Player extends cc.Component {
                Math.abs(n.y - r.y) < (BODY_H + shrink + r.h) / 2;
     }
 
+    // Lethal contact that a shield / invincibility may absorb.
+    // Shield only saves spike/enemy hits — a wall face stops you physically,
+    // so surviving it would leave the runner stuck (worse than death).
+    private hit(cause: string) {
+        if (this.invincibleT > 0) return;
+        if (this.shield && cause !== "wall") {
+            this.shield = false;
+            this.shieldNode.active = false;
+            Sfx.play("shieldbreak", 0.9);
+            this.setInvincible(1.2);
+            return;
+        }
+        this.die();
+    }
+
     private die() {
         if (!this.alive) return;
         this.alive = false;
+        this.node.stopAllActions();
         cc.tween(this.node)
             .parallel(
                 cc.tween().to(0.35, { scale: 2.2, opacity: 0 }),
@@ -130,6 +244,10 @@ export default class Player extends cc.Component {
             )
             .call(() => { this.node.active = false; })
             .start();
-        this.mgr.onDeath();
+        this.mgr.onDeath(this);
+    }
+
+    getGravityDir(): number {
+        return this.gravityDir;
     }
 }

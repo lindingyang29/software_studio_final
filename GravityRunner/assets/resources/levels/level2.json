@@ -17,6 +17,16 @@
   "platforms": [
     { "x": 5400, "y": -120, "w": 240, "h": 30 }
   ],
+  "powerups": [
+    { "x": 2450, "y": -212, "type": "shield" },
+    { "x": 4500, "y": -212, "type": "magnet" }
+  ],
+  "teleports": [
+    { "x": 5400, "y": -400, "tx": 5650, "ty": -212 }
+  ],
+  "enemies": [
+    { "x": 7900, "y": -200, "axis": "x", "range": 120, "period": 2.2 }
+  ],
   "spikes": [
     { "x": 700, "side": "floor" },
     { "x": 1100, "side": "ceiling" },

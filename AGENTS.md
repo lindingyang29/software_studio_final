@@ -92,3 +92,28 @@ GravityRunner/assets/
 - 兩次強制翻轉間隔 ≥ 0.75s（即 `speed × 0.75` px），Level 1 建議 ≥ 1.1s
 - 尖刺強制翻轉點 ≈ 尖刺 x − 翻轉位移；缺口強制翻轉點 ≈ 缺口左緣 − 少量提前量
 - 改完 JSON 要在腦中跑一遍完整路徑驗證（從 start 逐個障礙推落點），把驗證過程寫進 notes
+
+### 關卡 JSON 全部欄位（完整 schema 見 LevelBuilder.ts 開頭註解）
+
+| 欄位 | 格式 | 注意事項 |
+|---|---|---|
+| segments | `{x, w, side}` | 地板/天花板實體段 |
+| platforms | `{x, y, w, h}` | 走廊中的懸浮平台 |
+| spikes | `{x, side}` | 尖刺 |
+| crystals | `{x, y}` | 跑線 y：地板 -212 / 天花板 +212 / 翻轉途中 0 |
+| powerups | `{x, y, type}` | type: `shield`(擋一次尖刺/敵人) / `slow`(全場慢動作4s) / `magnet`(磁吸5s) |
+| teleports | `{x, y, tx, ty}` | 單向 A→B，**tx 必須 > x+50**（否則無限循環）；ty 的正負決定出口貼哪面 |
+| enemies | `{x, y, axis, range, period, phase?}` | 巡邏無人機，sin 振盪，碰到死；放置處必須留給玩家「提早/延後翻轉」的迴避空間 |
+| rotations | `{x, angle}` | 視覺場地旋轉（90=走廊轉直、重力看起來變左右）；物理不變，純相機旋轉；不要放在強制翻轉密集區 |
+
+### 雙人模式（已實作）
+
+- 選單選 1P/2P；2P：P1=W、P2=↑/Space，觸控左半=P1 右半=P2
+- 兩人同速並行（P2 起點落後 60px）；一人死且隊友存活 → 3 秒後在隊友旁復活（1.5s 無敵）；全滅 → 重來
+- 任一人到達終點 = 過關
+
+### 設定系統（已實作）
+
+- `GameData.settings`：sfx / bgm / speed(0.8~1.2) / scheme(0=NEON,1=SUNSET,2=MATRIX) / brightness(0.6~1)
+- localStorage 持久化；色系 palette 在 `LevelBuilder.SCHEMES`，新增色系只要加一個 entry
+- 音效一律走 `Sfx.play(name, vol)`，不要直接呼叫 cc.audioEngine（會繞過音量設定）

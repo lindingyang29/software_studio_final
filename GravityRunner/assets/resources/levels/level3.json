@@ -10,6 +10,18 @@
     { "x": -500, "w": 10600, "side": "ceiling" }
   ],
   "platforms": [],
+  "powerups": [
+    { "x": 250, "y": -212, "type": "shield" },
+    { "x": 5550, "y": -212, "type": "slow" }
+  ],
+  "rotations": [
+    { "x": 4000, "angle": 90 },
+    { "x": 6600, "angle": 0 }
+  ],
+  "enemies": [
+    { "x": 4650, "y": -100, "axis": "y", "range": 130, "period": 2.0 },
+    { "x": 8350, "y": 120, "axis": "y", "range": 130, "period": 1.8 }
+  ],
   "spikes": [
     { "x": 700, "side": "floor" },
     { "x": 1200, "side": "ceiling" },
