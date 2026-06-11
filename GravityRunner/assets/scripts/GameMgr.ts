@@ -47,6 +47,16 @@ export default class GameMgr extends cc.Component {
     private distPx = 0;
     private distLabel: cc.Label = null;
 
+    // hit feel
+    private shakeT = 0;
+    private hitStopT = 0;
+    private resultPanel: cc.Node = null;
+
+    // online ghosts
+    private ghosts: { [uid: string]: { node: cc.Node; tx: number; ty: number; tsy: number } } = {};
+    private liveAccum = 0;
+    private liveOn = false;
+
     private nameLabel: cc.Label = null;
     private crystalLabel: cc.Label = null;
     private deathLabel: cc.Label = null;
@@ -62,7 +72,7 @@ export default class GameMgr extends cc.Component {
 
     onLoad() {
         Sfx.preload();
-        Sfx.playBgm();
+        Sfx.playBgm("bgm_game");
         Fb.init();
         this.cameraNode = this.node.getChildByName("Main Camera");
 
@@ -80,6 +90,8 @@ export default class GameMgr extends cc.Component {
 
     onDestroy() {
         cc.systemEvent.off(cc.SystemEvent.EventType.KEY_DOWN, this.onKeyDown, this);
+        Fb.liveOff();
+        Fb.liveClear();
     }
 
     private onTexturesReady() {
@@ -142,12 +154,65 @@ export default class GameMgr extends cc.Component {
         this.refreshHud();
         this.state = "ready";
         this.setMsg("PRESS SPACE TO RUN", this.controlsHint());
+        this.startLive();
+    }
+
+    // ---------- online ghosts ----------
+
+    private startLive() {
+        if (!Fb.enabled() || this.liveOn) return;
+        Fb.liveListen((entries) => this.onLiveEntries(entries));
+        this.liveOn = true;
+    }
+
+    private onLiveEntries(entries: { uid: string; d: any }[]) {
+        if (!this.world || !this.world.isValid) return;
+        const now = Date.now();
+        const seen: { [uid: string]: boolean } = {};
+        for (const e of entries) {
+            if (e.uid === Fb.uid()) continue;
+            const d = e.d;
+            if (d.lv !== GameData.currentLevel) continue; // other mode/level
+            if (!d.t || now - d.t > 7000) continue;       // stale
+            seen[e.uid] = true;
+            let g = this.ghosts[e.uid];
+            if (!g) {
+                const n = new cc.Node("ghost");
+                const sp = n.addComponent(cc.Sprite);
+                sp.spriteFrame = this.frames["player"];
+                sp.sizeMode = cc.Sprite.SizeMode.CUSTOM;
+                n.setContentSize(36, 36);
+                n.opacity = 110;
+                n.color = cc.color(160, 170, 210);
+                n.zIndex = 4;
+                n.setPosition(d.x, d.y);
+                const ln = new cc.Node("name");
+                ln.setPosition(0, 34);
+                ln.color = cc.color(200, 210, 240);
+                const lb = ln.addComponent(cc.Label);
+                lb.string = d.n || "ghost";
+                lb.fontSize = 12;
+                lb.lineHeight = 14;
+                n.addChild(ln);
+                this.world.addChild(n);
+                g = this.ghosts[e.uid] = { node: n, tx: d.x, ty: d.y, tsy: 1 };
+            }
+            g.tx = d.x;
+            g.ty = d.y;
+            g.tsy = d.sy || 1;
+        }
+        for (const uid in this.ghosts) {
+            if (!seen[uid]) {
+                this.ghosts[uid].node.destroy();
+                delete this.ghosts[uid];
+            }
+        }
     }
 
     private controlsHint(): string {
         return GameData.players === 2
-            ? "P1: W flip, D dash, A brake      P2: UP flip, RIGHT dash, LEFT brake      R = RESTART"
-            : "SPACE/W/UP = FLIP    D = DASH    A = BRAKE    R = RESTART    ESC = PAUSE";
+            ? "P1: W flip / D dash / A brake / S slam      P2: ARROWS (UP flip, RIGHT dash, LEFT brake, DOWN slam)"
+            : "SPACE/W/UP = FLIP    D = DASH    A = BRAKE    S = SLAM    R = RESTART    ESC = PAUSE";
     }
 
     private spawnPlayersAndCamera(maxX: number) {
@@ -202,6 +267,7 @@ export default class GameMgr extends cc.Component {
         this.state = "ready";
         this.setMsg("PRESS SPACE TO RUN",
             this.controlsHint() + "    BEST " + GameData.getBestDist() + "m");
+        this.startLive();
     }
 
     private appendChunk(frag: any, endX: number) {
@@ -238,12 +304,21 @@ export default class GameMgr extends cc.Component {
             GameData.setBestDist(meters);
             Fb.syncUp();
         }
-        this.setMsg(
-            newBest ? "NEW BEST!  " + meters + "m" : "RUN OVER  —  " + meters + "m",
-            "BEST " + Math.max(meters, best) + "m    CRYSTALS " + this.crystalsTaken
-            + "    TIME " + this.formatTime(this.time)
-            + "    SPACE = RETRY    ESC = MENU"
-        );
+        this.setMsg("", "");
+        this.scheduleOnce(() => {
+            this.buildResultPanel(
+                newBest ? "NEW BEST!" : "RUN OVER",
+                newBest ? cc.color(255, 181, 74) : cc.color(255, 90, 100),
+                [
+                    "DISTANCE   " + meters + "m",
+                    "BEST   " + Math.max(meters, best) + "m",
+                    "CRYSTALS " + this.crystalsTaken + "    TIME " + this.formatTime(this.time)
+                ],
+                [
+                    { text: "RETRY (SPACE)", cb: () => this.proceedAfterWin() },
+                    { text: "MENU (ESC)", cb: () => Fx.fadeTo("Menu", this.hud) }
+                ]);
+        }, 0.5);
     }
 
     // ---------- HUD ----------
@@ -325,7 +400,8 @@ export default class GameMgr extends cc.Component {
         const p = this.players[idx];
         if (!p || !p.alive) return;
         if (kind === "dash") p.dash();
-        else p.brake();
+        else if (kind === "brake") p.brake();
+        else p.slam();
     }
 
     private onKeyDown(e: cc.Event.EventKeyboard) {
@@ -348,6 +424,12 @@ export default class GameMgr extends cc.Component {
                 break;
             case cc.macro.KEY.left:
                 this.skill(1, "brake");
+                break;
+            case cc.macro.KEY.s:
+                this.skill(0, "slam");
+                break;
+            case cc.macro.KEY.down:
+                this.skill(1, "slam");
                 break;
             case cc.macro.KEY.r:
                 this.fullRestart();
@@ -528,6 +610,62 @@ export default class GameMgr extends cc.Component {
         this.slowOverlay.opacity = 50;
     }
 
+    // ---------- result panel (win / game-over) ----------
+
+    private buildResultPanel(title: string, accent: cc.Color, lines: string[], buttons: { text: string; cb: () => void }[]) {
+        if (this.resultPanel) this.resultPanel.destroy();
+        const panel = new cc.Node("ResultPanel");
+        this.hud.addChild(panel, 20);
+        this.resultPanel = panel;
+
+        const mkSprite = (parent: cc.Node, w: number, h: number, x: number, y: number, color: cc.Color, opacity: number) => {
+            const n = new cc.Node("s");
+            const sp = n.addComponent(cc.Sprite);
+            sp.spriteFrame = this.frames["white"];
+            sp.sizeMode = cc.Sprite.SizeMode.CUSTOM;
+            n.setContentSize(w, h);
+            n.setPosition(x, y);
+            n.color = color;
+            n.opacity = opacity;
+            parent.addChild(n);
+            return n;
+        };
+
+        const dim = mkSprite(panel, 1700, 1100, 0, 0, cc.color(0, 0, 0), 130);
+        dim.on(cc.Node.EventType.TOUCH_START, (e: cc.Event) => e.stopPropagation());
+        const box = mkSprite(panel, 540, 340, 0, 0, cc.color(12, 14, 30), 245);
+        mkSprite(panel, 540, 7, 0, 167, accent, 255);
+        mkSprite(panel, 540, 3, 0, -170, accent, 160);
+
+        const titleLb = this.makeLabel(panel, 0, 118, 38, accent);
+        titleLb.string = title;
+        for (let i = 0; i < lines.length; i++) {
+            const lb = this.makeLabel(panel, 0, 52 - i * 36, 19, cc.color(235, 240, 255));
+            lb.string = lines[i];
+        }
+
+        const bw = 170;
+        const startX = -((buttons.length - 1) * (bw + 20)) / 2;
+        for (let i = 0; i < buttons.length; i++) {
+            const b = mkSprite(panel, bw, 48, startX + i * (bw + 20), -118, cc.color(24, 34, 76), 255);
+            const lb = this.makeLabel(b, 0, 0, 18, cc.color(235, 240, 255));
+            lb.string = buttons[i].text;
+            const cb = buttons[i].cb;
+            b.on(cc.Node.EventType.TOUCH_END, (e: cc.Event) => {
+                e.stopPropagation();
+                Sfx.play("click", 0.8);
+                cb();
+            });
+        }
+
+        // pop-in animation
+        panel.scale = 0.7;
+        panel.opacity = 0;
+        cc.tween(panel)
+            .to(0.25, { scale: 1, opacity: 255 }, { easing: "backOut" })
+            .start();
+    }
+
     // ---------- callbacks from Player ----------
 
     onCrystal() {
@@ -540,6 +678,10 @@ export default class GameMgr extends cc.Component {
         if (this.state !== "run") return;
         this.deaths++;
         Sfx.play("death", 0.8);
+        // hit feel: brief hit-stop + camera shake
+        this.hitStopT = 0.09;
+        this.timeScale = 0.05;
+        this.shakeT = 0.35;
         this.refreshHud();
 
         const survivor = this.anyAlive();
@@ -600,14 +742,25 @@ export default class GameMgr extends cc.Component {
             Fb.syncUp();
         }
         const last = !custom && GameData.currentLevel >= GameData.MAX_LEVEL;
-        this.setMsg(
-            last ? "YOU ESCAPED ASTRA-9!" : "LEVEL CLEAR!",
-            "CRYSTALS " + this.crystalsTaken + "/" + this.level.totalCrystals
-            + "    TIME " + this.formatTime(this.time)
-            + "    DEATHS " + this.deaths
-            + (custom ? "    SPACE = EDITOR    ESC = MENU"
-                : last ? "    SPACE = MENU" : "    SPACE = NEXT    ESC = MENU")
-        );
+        this.setMsg("", "");
+        const lines = [
+            "CRYSTALS   " + this.crystalsTaken + " / " + this.level.totalCrystals,
+            "TIME   " + this.formatTime(this.time),
+            "DEATHS   " + this.deaths
+        ];
+        const buttons = custom
+            ? [{ text: "EDITOR (SPACE)", cb: () => this.proceedAfterWin() },
+               { text: "MENU (ESC)", cb: () => Fx.fadeTo("Menu", this.hud) }]
+            : last
+            ? [{ text: "MENU (SPACE)", cb: () => this.proceedAfterWin() }]
+            : [{ text: "NEXT (SPACE)", cb: () => this.proceedAfterWin() },
+               { text: "MENU (ESC)", cb: () => Fx.fadeTo("Menu", this.hud) }];
+        // let the suck-into-portal animation play before the panel pops
+        this.scheduleOnce(() => {
+            this.buildResultPanel(
+                last ? "YOU ESCAPED ASTRA-9!" : "LEVEL CLEAR!",
+                cc.color(255, 181, 74), lines, buttons);
+        }, 0.65);
     }
 
     private proceedAfterWin() {
@@ -630,6 +783,45 @@ export default class GameMgr extends cc.Component {
         if (this.hud && this.cameraNode) {
             this.hud.x = this.cameraNode.x;
             this.hud.y = this.cameraNode.y;
+        }
+        // hit feel timers (run on real time, even outside the run state)
+        if (this.hitStopT > 0) {
+            this.hitStopT -= dt;
+            if (this.hitStopT <= 0) this.timeScale = this.slowT > 0 ? 0.55 : 1;
+        }
+        if (this.shakeT > 0) {
+            this.shakeT -= dt;
+            this.cameraNode.y = this.shakeT <= 0 ? 0
+                : (Math.random() * 2 - 1) * 16 * (this.shakeT / 0.35);
+        }
+        // online ghosts: smooth remote players and broadcast our position
+        if (this.liveOn) {
+            for (const uid in this.ghosts) {
+                const g = this.ghosts[uid];
+                const k = Math.min(1, 10 * dt);
+                g.node.x += (g.tx - g.node.x) * k;
+                g.node.y += (g.ty - g.node.y) * k;
+                g.node.scaleY = g.tsy;
+                const nameN = g.node.getChildByName("name");
+                if (nameN) nameN.scaleY = g.tsy; // keep the name upright
+            }
+            if (this.state === "run" && Fb.user()) {
+                this.liveAccum += dt;
+                if (this.liveAccum >= 0.12) {
+                    this.liveAccum = 0;
+                    const me = this.anyAlive();
+                    if (me) {
+                        Fb.liveSet({
+                            x: Math.round(me.node.x),
+                            y: Math.round(me.node.y),
+                            sy: me.node.scaleY < 0 ? -1 : 1,
+                            lv: GameData.currentLevel,
+                            n: Fb.userName() + (Fb.activeSlotName() ? ":" + Fb.activeSlotName() : ""),
+                            t: Date.now()
+                        });
+                    }
+                }
+            }
         }
         // animate field rotation at a constant rate, and re-anchor every frame
         // because the pivot (camera focus) keeps moving

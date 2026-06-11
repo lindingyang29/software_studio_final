@@ -151,6 +151,14 @@ export default class Player extends cc.Component {
         Sfx.play("click", 0.7);
     }
 
+    // slam: instant drop toward the current gravity side (airborne only)
+    slam() {
+        if (!this.alive || this.grounded) return;
+        this.vy = this.gravityDir * MAX_FALL;
+        Fx.flipDust(this.node.parent, this.node.x, this.node.y, -this.gravityDir);
+        Sfx.play("flip", 0.45);
+    }
+
     applyPower(type: string) {
         if (type === "shield") {
             this.shield = true;

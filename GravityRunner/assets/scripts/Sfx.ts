@@ -5,6 +5,7 @@ import GameData from "./GameData";
 export default class Sfx {
     private static clips: { [name: string]: cc.AudioClip } = {};
     private static bgmId = -1;
+    private static bgmTrack = "";
 
     static preload() {
         const names = ["flip", "crystal", "death", "win", "click", "power", "teleport", "shieldbreak"];
@@ -22,15 +23,18 @@ export default class Sfx {
         if (clip && v > 0) cc.audioEngine.play(clip, false, v);
     }
 
-    // BGM is optional: drop a file at resources/audio/bgm.mp3 and this picks it up.
-    static playBgm() {
-        if (Sfx.bgmId >= 0) {
+    // Per-scene looping BGM: pass a track name under resources/audio/
+    // (e.g. "bgm_menu", "bgm_game"). Re-calling with the same track is a no-op.
+    static playBgm(track: string = "bgm_menu") {
+        if (Sfx.bgmTrack === track && Sfx.bgmId >= 0) {
             Sfx.applyBgmVolume();
             return;
         }
-        cc.resources.load("audio/bgm", cc.AudioClip, (err, clip) => {
-            if (!err && clip && Sfx.bgmId < 0) {
-                Sfx.bgmId = cc.audioEngine.play(clip as any, true, GameData.settings.bgm);
+        Sfx.stopBgm();
+        Sfx.bgmTrack = track;
+        cc.resources.load("audio/" + track, cc.AudioClip, (err, clip) => {
+            if (!err && clip && Sfx.bgmTrack === track && Sfx.bgmId < 0) {
+                Sfx.bgmId = cc.audioEngine.play(clip as any, true, GameData.settings.bgm * 0.8);
             }
         });
     }
@@ -44,5 +48,6 @@ export default class Sfx {
             cc.audioEngine.stop(Sfx.bgmId);
             Sfx.bgmId = -1;
         }
+        Sfx.bgmTrack = "";
     }
 }

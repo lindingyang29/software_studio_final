@@ -20,12 +20,13 @@ export default class MenuCtrl extends cc.Component {
     private accountPanel: cc.Node = null;
     private boardPanel: cc.Node = null;
     private savesPanel: cc.Node = null;
+    private helpPanel: cc.Node = null;
     private accountLabel: cc.Node = null;
     private accountStatus: cc.Node = null;
 
     onLoad() {
         Sfx.preload();
-        Sfx.playBgm();
+        Sfx.playBgm("bgm_menu");
         Fb.init();
         Fb.onChanged = () => this.refreshAccount();
         cc.resources.loadDir("textures", cc.SpriteFrame, (err, assets: cc.SpriteFrame[]) => {
@@ -207,6 +208,14 @@ export default class MenuCtrl extends cc.Component {
         this.accountLabel = this.label(this.node, "", 462, 300, 14, dim, 1);
         this.refreshAccount();
 
+        // help button (top-left corner)
+        const hBtn = this.sprite(this.node, "white", -430, 300, 100, 26, cc.color(40, 50, 100));
+        this.label(hBtn, "? HOW TO PLAY", 0, 0, 11, white);
+        hBtn.on(cc.Node.EventType.TOUCH_END, () => {
+            Sfx.play("click", 0.8);
+            this.toggleHelp();
+        });
+
         this.hintLabel = this.label(this.node,
             "SPACE / W / UP : FLIP      R : RESTART      ESC : PAUSE      [SPACE = QUICK START]",
             0, -308, 15, dim);
@@ -233,10 +242,11 @@ export default class MenuCtrl extends cc.Component {
         if (this.accountPanel) { this.accountPanel.destroy(); this.accountPanel = null; }
         if (this.boardPanel) { this.boardPanel.destroy(); this.boardPanel = null; }
         if (this.savesPanel) { this.savesPanel.destroy(); this.savesPanel = null; }
+        if (this.helpPanel) { this.helpPanel.destroy(); this.helpPanel = null; }
     }
 
     private anyPanelOpen(): boolean {
-        return !!(this.settingsPanel || this.accountPanel || this.boardPanel || this.savesPanel);
+        return !!(this.settingsPanel || this.accountPanel || this.boardPanel || this.savesPanel || this.helpPanel);
     }
 
     private toggleSettings() {
@@ -279,7 +289,7 @@ export default class MenuCtrl extends cc.Component {
             {
                 name: "GAME SPEED",
                 value: () => pct(s.speed),
-                next: () => { s.speed = s.speed >= 1.2 ? 0.8 : Math.round((s.speed + 0.2) * 10) / 10; }
+                next: () => { s.speed = s.speed >= 1.4 ? 0.6 : Math.round((s.speed + 0.2) * 10) / 10; }
             },
             {
                 name: "COLOR SCHEME",
@@ -437,6 +447,66 @@ export default class MenuCtrl extends cc.Component {
 
         const closeBtn = this.sprite(panel, "white", 0, -185, 160, 40, cc.color(50, 50, 60));
         this.label(closeBtn, "CLOSE", 0, 0, 18, white);
+        closeBtn.on(cc.Node.EventType.TOUCH_END, () => {
+            Sfx.play("click", 0.8);
+            this.closePanels();
+        });
+    }
+
+    // ---------- how to play panel ----------
+
+    private toggleHelp() {
+        if (this.helpPanel) {
+            this.closePanels();
+            return;
+        }
+        this.closePanels();
+
+        const white = cc.color(235, 240, 255);
+        const orange = cc.color(255, 181, 74);
+        const cyan = cc.color(127, 247, 255);
+        const dim = cc.color(150, 160, 190);
+
+        const panel = this.sprite(this.node, "white", 0, 0, 700, 580, cc.color(10, 12, 26));
+        panel.opacity = 250;
+        panel.zIndex = 50;
+        panel.on(cc.Node.EventType.TOUCH_START, (e: cc.Event) => e.stopPropagation());
+        this.helpPanel = panel;
+
+        this.label(panel, "HOW TO PLAY", 0, 258, 28, orange);
+
+        const row = (y: number, key: string, desc: string, keyColor: cc.Color) => {
+            this.label(panel, key, -320, y, 17, keyColor, 0);
+            this.label(panel, desc, -110, y, 16, white, 0);
+        };
+        this.label(panel, "— CONTROLS (P1 / P2 in co-op) —", 0, 218, 15, dim);
+        row(184, "SPACE / W   |   UP", "FLIP GRAVITY (only while on a surface)", cyan);
+        row(152, "D   |   RIGHT", "DASH - speed burst x1.55 (2.5s cooldown)", cyan);
+        row(120, "A   |   LEFT", "BRAKE - slow to x0.55, for timing pistons", cyan);
+        row(88, "S   |   DOWN", "SLAM - instant drop while airborne", cyan);
+        row(56, "R / ESC / Q", "restart / pause / quit to menu (paused)", cyan);
+
+        this.label(panel, "— PICKUPS & HAZARDS —", 0, 12, 15, dim);
+        const icon = (x: number, y: number, frame: string, desc: string) => {
+            const ic = this.sprite(panel, frame, x, y, 30, 30);
+            this.label(panel, desc, x + 25, y, 14, white, 0);
+            return ic;
+        };
+        icon(-320, -26, "shield", "SHIELD: survive one hit");
+        icon(-320, -62, "slow", "SLOW-MO: everything 4s slower");
+        icon(-320, -98, "magnet", "MAGNET: pulls crystals 6s");
+        icon(40, -26, "crystal", "CRYSTAL: collect them all");
+        icon(40, -62, "drone", "DRONE: deadly patrol, time your flip");
+        const tp = icon(40, -98, "tport", "TELEPORTER: one-way jump");
+        tp.color = cc.color(190, 120, 255);
+
+        this.label(panel, "PISTONS (orange-edged bands) extend and retract — pass when retracted, or ride on top.",
+            0, -150, 14, dim);
+        this.label(panel, "Falling through a gap or touching spikes = death. Reach the portal column to clear the level.",
+            0, -178, 14, dim);
+
+        const closeBtn = this.sprite(panel, "white", 0, -240, 160, 40, cc.color(50, 50, 60));
+        this.label(closeBtn, "CLOSE", 0, 0, 17, white);
         closeBtn.on(cc.Node.EventType.TOUCH_END, () => {
             Sfx.play("click", 0.8);
             this.closePanels();

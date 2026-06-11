@@ -257,6 +257,58 @@ export default class Fb {
         return null;
     }
 
+    // ---------- live presence (online ghosts) ----------
+    // Stored at leaderboard/{uid}/_live so it fits the existing security
+    // rules (owner-writable, publicly readable). fetchTop skips it because
+    // it has no .best field.
+
+    private static liveHandle: { ref: any; handler: any } = null;
+    private static liveDisconnectArmed = false;
+
+    static uid(): string {
+        return Fb.authUser ? Fb.authUser.uid : "";
+    }
+
+    static liveSet(data: any) {
+        if (!Fb.ready() || !Fb.authUser) return;
+        const r = Fb.sdk().database().ref("leaderboard/" + Fb.authUser.uid + "/_live");
+        if (!Fb.liveDisconnectArmed) {
+            r.onDisconnect().remove();
+            Fb.liveDisconnectArmed = true;
+        }
+        r.set(data);
+    }
+
+    static liveClear() {
+        if (!Fb.ready() || !Fb.authUser) return;
+        Fb.sdk().database().ref("leaderboard/" + Fb.authUser.uid + "/_live").remove();
+    }
+
+    static liveListen(cb: (entries: { uid: string; d: any }[]) => void) {
+        if (!Fb.ready()) return;
+        Fb.liveOff();
+        const ref = Fb.sdk().database().ref("leaderboard");
+        const handler = (snap: any) => {
+            const out: { uid: string; d: any }[] = [];
+            snap.forEach((child: any) => {
+                const v = child.val();
+                if (v && v._live && typeof v._live.x === "number") {
+                    out.push({ uid: child.key, d: v._live });
+                }
+            });
+            cb(out);
+        };
+        ref.on("value", handler);
+        Fb.liveHandle = { ref: ref, handler: handler };
+    }
+
+    static liveOff() {
+        if (Fb.liveHandle) {
+            Fb.liveHandle.ref.off("value", Fb.liveHandle.handler);
+            Fb.liveHandle = null;
+        }
+    }
+
     // ---------- leaderboard ----------
 
     // Flattens leaderboard/{uid}/{slotId} entries (and tolerates legacy flat
