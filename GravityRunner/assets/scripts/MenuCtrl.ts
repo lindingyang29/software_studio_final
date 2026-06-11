@@ -1,6 +1,7 @@
 import GameData from "./GameData";
 import LevelBuilder, { SCHEMES } from "./LevelBuilder";
 import Sfx from "./Sfx";
+import Fx from "./Fx";
 import Fb from "./Fb";
 
 const { ccclass } = cc._decorator;
@@ -81,17 +82,31 @@ export default class MenuCtrl extends cc.Component {
         const white = cc.color(235, 240, 255);
         const dim = cc.color(110, 120, 150);
 
+        Fx.setFrame(this.frames["white"]);
         this.bgNode = this.sprite(this.node, "bg", 0, 0, 970, 650);
         this.applyBgTint();
+        Fx.fadeIn(this.node);
 
-        // title
+        // title (with a short opening animation: pop in + pulse)
         const title = this.label(this.node, "GRAVITY FLIP RUNNER", 0, 230, 56, cyan);
+        title.scale = 0;
         cc.tween(title)
-            .to(1.4, { opacity: 170 }, { easing: "sineInOut" })
-            .to(1.4, { opacity: 255 }, { easing: "sineInOut" })
-            .repeatForever()
+            .to(0.6, { scale: 1 }, { easing: "backOut" })
+            .then(cc.tween()
+                .to(1.4, { opacity: 170 }, { easing: "sineInOut" })
+                .to(1.4, { opacity: 255 }, { easing: "sineInOut" })
+                .union()
+                .repeatForever())
             .start();
         this.label(this.node, "— ESCAPE ASTRA-9 —", 0, 178, 18, orange);
+
+        // opening animation: a runner cube dashes across the screen
+        const opener = this.sprite(this.node, "player", -560, -150, 40, 40);
+        cc.tween(opener)
+            .to(1.1, { x: 560 })
+            .call(() => opener.destroy())
+            .start();
+        cc.tween(opener).by(1.1, { angle: -720 }).start();
 
         // decorations
         const deco = this.sprite(this.node, "player", -340, 60, 48, 48);
@@ -133,7 +148,7 @@ export default class MenuCtrl extends cc.Component {
         enBtn.on(cc.Node.EventType.TOUCH_END, () => {
             Sfx.play("click", 0.8);
             GameData.currentLevel = -1;
-            cc.director.loadScene("Game");
+            Fx.fadeTo("Game", this.node);
         });
 
         // level buttons
@@ -148,7 +163,7 @@ export default class MenuCtrl extends cc.Component {
                 btn.on(cc.Node.EventType.TOUCH_END, () => {
                     Sfx.play("click", 0.8);
                     GameData.currentLevel = i;
-                    cc.director.loadScene("Game");
+                    Fx.fadeTo("Game", this.node);
                 });
             }
         }
@@ -164,7 +179,7 @@ export default class MenuCtrl extends cc.Component {
         this.label(eBtn, "LEVEL EDITOR", 0, 0, 20, cyan);
         eBtn.on(cc.Node.EventType.TOUCH_END, () => {
             Sfx.play("click", 0.8);
-            cc.director.loadScene("Editor");
+            Fx.fadeTo("Editor", this.node);
         });
 
         // account / leaderboard row
@@ -435,7 +450,7 @@ export default class MenuCtrl extends cc.Component {
     private onKeyDown(e: cc.Event.EventKeyboard) {
         if (e.keyCode === cc.macro.KEY.space && !this.anyPanelOpen()) {
             GameData.currentLevel = 1;
-            cc.director.loadScene("Game");
+            Fx.fadeTo("Game", this.node);
         }
         if (e.keyCode === cc.macro.KEY.escape && this.anyPanelOpen()) {
             this.closePanels();

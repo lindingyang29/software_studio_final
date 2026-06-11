@@ -23,6 +23,7 @@
 // append() returns a manifest so a chunk's data can be removed again.
 
 import GameData from "./GameData";
+import Fx from "./Fx";
 
 export const FLOOR_Y = -250;
 export const CEIL_Y = 250;
@@ -381,6 +382,7 @@ export default class LevelBuilder {
             .to(0.6, { opacity: 60 })
             .repeatForever()
             .start();
+        Fx.portalAmbient(world, goalX, 0, pal.goal);
 
         const startSide = (data.start && data.start.side) === "ceiling" ? 1 : -1;
         level.start = {

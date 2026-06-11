@@ -4,6 +4,7 @@ import EndlessGen from "./EndlessGen";
 import Player from "./Player";
 import CameraFollow from "./CameraFollow";
 import Sfx from "./Sfx";
+import Fx from "./Fx";
 import Fb from "./Fb";
 
 const { ccclass } = cc._decorator;
@@ -82,6 +83,7 @@ export default class GameMgr extends cc.Component {
     }
 
     private onTexturesReady() {
+        Fx.setFrame(this.frames["white"]);
         // background rides along as a child of the camera (auto screen-aligned,
         // even when the camera rotates in rotation zones)
         const bg = new cc.Node("BG");
@@ -98,6 +100,7 @@ export default class GameMgr extends cc.Component {
         this.node.addChild(this.world);
 
         this.buildHud();
+        Fx.fadeIn(this.hud);
 
         this.endless = GameData.currentLevel === -1;
         if (this.endless) {
@@ -143,8 +146,8 @@ export default class GameMgr extends cc.Component {
 
     private controlsHint(): string {
         return GameData.players === 2
-            ? "P1: W = FLIP      P2: UP / SPACE = FLIP      R = RESTART"
-            : "SPACE / W / UP = FLIP GRAVITY    R = RESTART    ESC = PAUSE";
+            ? "P1: W flip, D dash, A brake      P2: UP flip, RIGHT dash, LEFT brake      R = RESTART"
+            : "SPACE/W/UP = FLIP    D = DASH    A = BRAKE    R = RESTART    ESC = PAUSE";
     }
 
     private spawnPlayersAndCamera(maxX: number) {
@@ -316,6 +319,15 @@ export default class GameMgr extends cc.Component {
 
     // ---------- input ----------
 
+    private skill(who: number, kind: string) {
+        if (this.state !== "run") return;
+        const idx = GameData.players === 2 ? who : 0;
+        const p = this.players[idx];
+        if (!p || !p.alive) return;
+        if (kind === "dash") p.dash();
+        else p.brake();
+    }
+
     private onKeyDown(e: cc.Event.EventKeyboard) {
         switch (e.keyCode) {
             case cc.macro.KEY.space:
@@ -325,6 +337,18 @@ export default class GameMgr extends cc.Component {
             case cc.macro.KEY.w:
                 this.onAction(0);
                 break;
+            case cc.macro.KEY.d:
+                this.skill(0, "dash");
+                break;
+            case cc.macro.KEY.a:
+                this.skill(0, "brake");
+                break;
+            case cc.macro.KEY.right:
+                this.skill(1, "dash");
+                break;
+            case cc.macro.KEY.left:
+                this.skill(1, "brake");
+                break;
             case cc.macro.KEY.r:
                 this.fullRestart();
                 break;
@@ -333,7 +357,7 @@ export default class GameMgr extends cc.Component {
                 break;
             case cc.macro.KEY.q:
                 if (this.state === "paused" || this.state === "loading") {
-                    cc.director.loadScene("Menu");
+                    Fx.fadeTo("Menu", this.hud);
                 }
                 break;
         }
@@ -378,7 +402,7 @@ export default class GameMgr extends cc.Component {
             this.closePauseMenu();
             this.setMsg("", "");
         } else if (this.state === "win") {
-            cc.director.loadScene("Menu");
+            Fx.fadeTo("Menu", this.hud);
         }
     }
 
@@ -418,7 +442,7 @@ export default class GameMgr extends cc.Component {
         };
         mkBtn("RESUME  (SPACE)", 40, () => this.togglePause());
         mkBtn("RESTART  (R)", -30, () => this.fullRestart());
-        mkBtn("MAIN MENU  (Q)", -100, () => cc.director.loadScene("Menu"));
+        mkBtn("MAIN MENU  (Q)", -100, () => Fx.fadeTo("Menu", this.hud));
     }
 
     private closePauseMenu() {
@@ -557,11 +581,19 @@ export default class GameMgr extends cc.Component {
         return null;
     }
 
-    onWin() {
+    onWin(winner?: Player) {
         if (this.state !== "run") return;
         this.state = "win";
         this.unscheduleAllCallbacks();
         Sfx.play("win", 0.9);
+        // win animation: portal sucks the runner in + celebration burst
+        Fx.confetti(this.world, this.level.goal.x, 0);
+        if (winner && winner.node && winner.node.isValid) {
+            winner.node.stopAllActions();
+            cc.tween(winner.node)
+                .to(0.55, { x: this.level.goal.x, y: 0, scale: 0, angle: 360 }, { easing: "sineIn" })
+                .start();
+        }
         const custom = GameData.currentLevel === 0;
         if (!custom) {
             GameData.unlockNext(GameData.currentLevel);
@@ -580,14 +612,14 @@ export default class GameMgr extends cc.Component {
 
     private proceedAfterWin() {
         if (this.endless) {
-            cc.director.loadScene("Game"); // retry a fresh run
+            Fx.fadeTo("Game", this.hud); // retry a fresh run
         } else if (GameData.currentLevel === 0) {
-            cc.director.loadScene("Editor");
+            Fx.fadeTo("Editor", this.hud);
         } else if (GameData.currentLevel < GameData.MAX_LEVEL) {
             GameData.currentLevel++;
-            cc.director.loadScene("Game");
+            Fx.fadeTo("Game", this.hud);
         } else {
-            cc.director.loadScene("Menu");
+            Fx.fadeTo("Menu", this.hud);
         }
     }
 

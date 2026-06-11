@@ -1,6 +1,7 @@
 import GameData from "./GameData";
 import LevelBuilder, { FLOOR_Y, CEIL_Y } from "./LevelBuilder";
 import Sfx from "./Sfx";
+import Fx from "./Fx";
 
 const { ccclass } = cc._decorator;
 
@@ -81,6 +82,8 @@ export default class EditorCtrl extends cc.Component {
         this.buildToolbar();
         this.rebuild();
 
+        Fx.setFrame(this.frames["white"]);
+        Fx.fadeIn(this.ui);
         cc.systemEvent.on(cc.SystemEvent.EventType.KEY_DOWN, this.onKeyDown, this);
         this.cameraNode.x = 0;
     }
@@ -266,7 +269,7 @@ export default class EditorCtrl extends cc.Component {
         this.mkBtn(this.toolbar, "TEST", -353, -24, 78, cc.color(70, 55, 15), () => {
             this.save();
             GameData.currentLevel = 0;
-            cc.director.loadScene("Game");
+            Fx.fadeTo("Game", this.ui);
         });
         this.mkBtn(this.toolbar, "CLEAR", -437, -64, 78, cc.color(70, 25, 35), () => {
             this.data = this.starterData();
@@ -274,7 +277,7 @@ export default class EditorCtrl extends cc.Component {
             this.flashHint("CLEARED TO STARTER LEVEL");
         });
         this.mkBtn(this.toolbar, "MENU", -353, -64, 78, cc.color(50, 50, 60), () => {
-            cc.director.loadScene("Menu");
+            Fx.fadeTo("Menu", this.ui);
         });
 
         const tn = new cc.Node("toolLabel");
