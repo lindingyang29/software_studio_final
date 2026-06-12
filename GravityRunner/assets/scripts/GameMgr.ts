@@ -63,6 +63,17 @@ export default class GameMgr extends cc.Component {
     private liveAccum = 0;
     private liveOn = false;
 
+    // Rhythm battle split-screen layout.  In VS AI / online rhythm modes, the
+    // playable chart is moved to the lower half, while AI / remote opponents are
+    // rendered on a separate visual-only copy in the upper half.
+    private rhythmSplitBattle = false;
+    private rhythmSplitPlayerOffset = -165;
+    private rhythmSplitOpponentOffset = 165;
+    private rhythmSplitYScale = 1;
+    private rhythmSplitLine: cc.Node = null;
+    private rhythmSplitTopLabel: cc.Label = null;
+    private rhythmSplitBottomLabel: cc.Label = null;
+
     private nameLabel: cc.Label = null;
     private crystalLabel: cc.Label = null;
     private deathLabel: cc.Label = null;
@@ -189,6 +200,7 @@ export default class GameMgr extends cc.Component {
 
     private startLevel(data: any) {
         this.level = LevelBuilder.build(this.world, data, this.frames);
+        this.prepareRhythmBattleSplit();
         this.spawnPlayersAndCamera(this.level.length - 480);
         if (this.isRhythmAiBattle()) this.spawnRhythmAi();
         this.applyRotationForX(this.level.start.x, true);
@@ -379,6 +391,161 @@ export default class GameMgr extends cc.Component {
         });
     }
 
+    // ---------- rhythm battle split-screen layout ----------
+
+    private shouldSplitRhythmBattle(): boolean {
+        return !!(this.level && this.level.rhythm && this.level.rhythm.enabled
+            && (GameData.rhythmBattleMode === "ai" || GameData.rhythmBattleMode === "online" || !!GameData.roomCode));
+    }
+
+    private prepareRhythmBattleSplit() {
+        this.rhythmSplitBattle = false;
+        this.rhythmSplitYScale = 1;
+        if (!this.shouldSplitRhythmBattle()) return;
+
+        const r = this.level.rhythm;
+        const floorY0 = Number(r.floorY) || -140;
+        const ceilingY0 = Number(r.ceilingY) || 140;
+        const gap = Math.max(1, Math.abs(ceilingY0 - floorY0));
+        // Keep very large rhythm-gap settings readable when two tracks must fit
+        // on screen.  Normal 280px charts remain unchanged.
+        this.rhythmSplitYScale = Math.min(1, 300 / gap);
+        this.rhythmSplitPlayerOffset = -165;
+        this.rhythmSplitOpponentOffset = 165;
+        this.rhythmSplitBattle = true;
+
+        const fy = (y: number) => this.rhythmSplitYFromOriginal(Number(y) || 0, "player");
+        for (const child of this.world.children) child.y = fy(child.y);
+
+        this.level.start.y = fy(this.level.start.y);
+        this.level.goal.y = fy(this.level.goal.y || 0);
+        this.level.goal.h = Math.max(this.level.goal.h || 0, 620);
+        for (const a of [this.level.solids, this.level.spikes]) {
+            for (const rect of a) rect.y = fy(rect.y);
+        }
+        for (const c of this.level.crystals) { c.y = fy(c.y); if (c.node && c.node.isValid) c.node.y = c.y; }
+        for (const p of this.level.powerups) { p.y = fy(p.y); if (p.node && p.node.isValid) p.node.y = p.y; }
+        for (const t of this.level.teleports) { t.y = fy(t.y); t.ty = fy(t.ty); }
+        for (const e of this.level.enemies) {
+            e.y0 = fy(e.y0);
+            if (e.node && e.node.isValid) e.node.y = e.y0;
+        }
+        for (const m of this.level.movers) {
+            m.rect.y = fy(m.rect.y);
+            m.baseY = fy(m.baseY);
+            for (let i = 0; i < m.baseYs.length; i++) m.baseYs[i] = fy(m.baseYs[i]);
+            for (let i = 0; i < m.nodes.length; i++) if (m.nodes[i] && m.nodes[i].isValid) m.nodes[i].y = m.baseYs[i];
+        }
+
+        r.floorY = fy(r.floorY || -140);
+        r.ceilingY = fy(r.ceilingY || 140);
+        if (r.laneYs && r.laneYs.length) r.laneYs = r.laneYs.map((y) => fy(y));
+        for (const n of r.notes) {
+            n.y = fy(n.y);
+            if (Number.isFinite(Number(n.voidY))) n.voidY = fy(n.voidY);
+            if (n.node && n.node.isValid) n.node.y = n.y;
+        }
+
+        this.buildOpponentRhythmTrack();
+    }
+
+    private rhythmSplitYFromOriginal(y: number, side: string): number {
+        const off = side === "opponent" ? this.rhythmSplitOpponentOffset : this.rhythmSplitPlayerOffset;
+        return y * this.rhythmSplitYScale + off;
+    }
+
+    private rhythmOpponentYFromPlayerY(y: number): number {
+        if (!this.rhythmSplitBattle) return y;
+        // y already includes the lower-track transform.  Move it by exactly the
+        // vertical distance between the two track centers.
+        return y - this.rhythmSplitPlayerOffset + this.rhythmSplitOpponentOffset;
+    }
+
+    private makeWorldRect(name: string, x: number, y: number, w: number, h: number, color: cc.Color, opacity: number, z: number): cc.Node {
+        const n = new cc.Node(name);
+        const sp = n.addComponent(cc.Sprite);
+        sp.spriteFrame = this.frames["white"];
+        sp.sizeMode = cc.Sprite.SizeMode.CUSTOM;
+        n.setContentSize(w, h);
+        n.setPosition(x, y);
+        n.color = color;
+        n.opacity = opacity;
+        this.world.addChild(n, z);
+        return n;
+    }
+
+    private buildOpponentRhythmTrack() {
+        if (!this.rhythmSplitBattle || !this.level || !this.level.rhythm) return;
+        const r = this.level.rhythm;
+        const sx = this.level.start.x;
+        const lx = Math.max(1600, this.level.length || 10000);
+        const baseX = sx + lx / 2 - 250;
+        const palGuide = cc.color(110, 125, 165);
+        const cyan = cc.color(90, 185, 255);
+        const red = cc.color(255, 82, 78);
+        const railColor = cc.color(28, 36, 72);
+
+        const laneYs = r.laneYs && r.laneYs.length ? r.laneYs : [r.floorY + 18, r.ceilingY - 18];
+        for (let i = 0; i < laneYs.length; i++) {
+            const y = this.rhythmOpponentYFromPlayerY(laneYs[i]);
+            const guide = this.makeWorldRect("opponentGuide", baseX, y, lx + 900, r.style === "jump-flip" ? 4 : 3,
+                i === r.startLane ? cc.color(235, 240, 255) : palGuide, i === r.startLane ? 70 : 42, 0);
+            guide.opacity = r.style === "jump-flip" ? 60 : guide.opacity;
+        }
+
+        if (r.style === "jump-flip") {
+            const floorY = this.rhythmOpponentYFromPlayerY(r.floorY || -140);
+            const ceilY = this.rhythmOpponentYFromPlayerY(r.ceilingY || 140);
+            const h = 58;
+            this.makeWorldRect("opponentFloor", baseX, floorY - h / 2, lx + 900, h, railColor, 125, 1);
+            this.makeWorldRect("opponentCeiling", baseX, ceilY + h / 2, lx + 900, h, railColor, 125, 1);
+        }
+
+        for (const note of r.notes) {
+            const color = (note.color === "blue" || note.action === "flip") ? cyan : red;
+            const size = note.kind === "roll" ? 20 : (note.gogo ? 34 : 30);
+            if (note.action === "flip" && Number.isFinite(Number(note.voidY))) {
+                const hole = this.makeWorldRect("opponentHole", note.x, this.rhythmOpponentYFromPlayerY(Number(note.voidY)), 54, 18, cc.color(15, 15, 26), 80, 3);
+                hole.opacity = 75;
+            }
+            const n = this.makeWorldRect("opponentNote", note.x, this.rhythmOpponentYFromPlayerY(note.y),
+                note.action === "flip" ? size + 6 : size, note.action === "flip" ? size + 6 : size,
+                color, 128, 4);
+            n.angle = note.action === "flip" || r.style === "gravity-collect" ? 45 : 0;
+            const center = new cc.Node("noteCenter");
+            const cs = center.addComponent(cc.Sprite);
+            cs.spriteFrame = this.frames["white"];
+            cs.sizeMode = cc.Sprite.SizeMode.CUSTOM;
+            center.setContentSize(note.action === "flip" ? 10 : 12, note.action === "flip" ? 10 : 12);
+            center.color = cc.color(255, 255, 255);
+            center.opacity = 120;
+            n.addChild(center, 1);
+            (note as any).opponentNode = n;
+        }
+    }
+
+    private applyRhythmHudLayout() {
+        const split = this.rhythmSplitBattle && this.isRhythmLevel();
+        if (this.rhythmLabel) this.rhythmLabel.node.y = split ? -256 : 256;
+        if (this.rhythmAiLabel) this.rhythmAiLabel.node.y = split ? 256 : 230;
+        if (this.judgeLabel) this.judgeLabel.node.y = split ? -86 : 86;
+    }
+
+    private refreshRhythmSplitHud() {
+        this.applyRhythmHudLayout();
+        if (!this.rhythmSplitLine) return;
+        const active = this.rhythmSplitBattle && this.isRhythmLevel();
+        this.rhythmSplitLine.active = active;
+        if (this.rhythmSplitTopLabel) {
+            this.rhythmSplitTopLabel.node.active = active;
+            this.rhythmSplitTopLabel.string = this.isRhythmAiBattle() ? "AI" : "OPPONENT";
+        }
+        if (this.rhythmSplitBottomLabel) {
+            this.rhythmSplitBottomLabel.node.active = active;
+            this.rhythmSplitBottomLabel.string = "YOU";
+        }
+    }
+
     // ---------- online ghosts ----------
 
     private startLive() {
@@ -419,7 +586,7 @@ export default class GameMgr extends cc.Component {
                 n.opacity = 110;
                 n.color = cc.color(160, 170, 210);
                 n.zIndex = 4;
-                n.setPosition(d.x, d.y);
+                n.setPosition(d.x, this.rhythmSplitBattle && this.isRhythmLevel() ? this.rhythmOpponentYFromPlayerY(Number(d.y) || 0) : d.y);
                 const ln = new cc.Node("name");
                 ln.setPosition(0, 34);
                 ln.color = cc.color(200, 210, 240);
@@ -429,17 +596,18 @@ export default class GameMgr extends cc.Component {
                 lb.lineHeight = 14;
                 n.addChild(ln);
                 this.world.addChild(n);
-                g = this.ghosts[e.uid] = { node: n, tx: d.x, ty: d.y, tsy: 1, gvx: 0, gvy: 0, col: false, lastT: d.t || 0, score: d.score || 0, combo: d.combo || 0 };
+                g = this.ghosts[e.uid] = { node: n, tx: d.x, ty: this.rhythmSplitBattle && this.isRhythmLevel() ? this.rhythmOpponentYFromPlayerY(Number(d.y) || 0) : d.y, tsy: 1, gvx: 0, gvy: 0, col: false, lastT: d.t || 0, score: d.score || 0, combo: d.combo || 0 };
             }
             // velocity estimate from consecutive network samples
             const dtNet = ((d.t || 0) - g.lastT) / 1000;
             if (dtNet > 0.03 && dtNet < 2) {
+                const mappedY = this.rhythmSplitBattle && this.isRhythmLevel() ? this.rhythmOpponentYFromPlayerY(Number(d.y) || 0) : d.y;
                 g.gvx = (d.x - g.tx) / dtNet;
-                g.gvy = (d.y - g.ty) / dtNet;
+                g.gvy = (mappedY - g.ty) / dtNet;
             }
             g.lastT = d.t || 0;
             g.tx = d.x;
-            g.ty = d.y;
+            g.ty = this.rhythmSplitBattle && this.isRhythmLevel() ? this.rhythmOpponentYFromPlayerY(Number(d.y) || 0) : d.y;
             g.tsy = d.sy || 1;
             g.col = !!d.col;
             g.score = d.score || 0;
@@ -640,9 +808,23 @@ export default class GameMgr extends cc.Component {
         this.deathLabel = this.makeLabel(this.hud, 205, 284, 22, pink, 0);
         this.timeLabel = this.makeLabel(this.hud, 450, 284, 24, orange, 1);
         this.distLabel = this.makeLabel(this.hud, 0, 284, 26, orange);
-        this.rhythmLabel = this.makeLabel(this.hud, 0, 256, 22, orange);
-        this.rhythmAiLabel = this.makeLabel(this.hud, 0, 230, 18, cyan);
-        this.judgeLabel = this.makeLabel(this.hud, 0, 86, 34, white);
+        this.rhythmLabel = this.makeLabel(this.hud, 0, -256, 22, orange);
+        this.rhythmAiLabel = this.makeLabel(this.hud, 0, 256, 18, cyan);
+        this.rhythmSplitLine = new cc.Node("rhythmSplitLine");
+        const splitSp = this.rhythmSplitLine.addComponent(cc.Sprite);
+        splitSp.spriteFrame = this.frames["white"];
+        splitSp.sizeMode = cc.Sprite.SizeMode.CUSTOM;
+        this.rhythmSplitLine.setContentSize(1300, 3);
+        this.rhythmSplitLine.setPosition(0, 0);
+        this.rhythmSplitLine.color = cc.color(120, 135, 180);
+        this.rhythmSplitLine.opacity = 110;
+        this.rhythmSplitLine.active = false;
+        this.hud.addChild(this.rhythmSplitLine, 0);
+        this.rhythmSplitTopLabel = this.makeLabel(this.hud, -620, 244, 14, cyan, 0);
+        this.rhythmSplitBottomLabel = this.makeLabel(this.hud, -620, -244, 14, orange, 0);
+        this.rhythmSplitTopLabel.node.active = false;
+        this.rhythmSplitBottomLabel.node.active = false;
+        this.judgeLabel = this.makeLabel(this.hud, 0, -86, 34, white);
         this.msgLabel = this.makeLabel(this.hud, 0, 40, 44, white);
         this.subLabel = this.makeLabel(this.hud, 0, -10, 18, cyan);
     }
@@ -659,6 +841,7 @@ export default class GameMgr extends cc.Component {
         this.deathLabel.string = "HEALTH  " + this.health + " / " + this.maxHealth;
         this.timeLabel.string = this.formatTime(this.time);
         this.updateRhythmHud();
+        this.refreshRhythmSplitHud();
     }
 
     private formatTime(t: number): string {
@@ -982,17 +1165,24 @@ export default class GameMgr extends cc.Component {
                     n.node.opacity = (this.isCollectorRhythm() || this.isJumpFlipRhythm()) ? 238 : (n.flip ? 245 : 190);
                     n.node.scale = 1;
                 }
+                const opponentNode = (n as any).opponentNode as cc.Node;
+                if (opponentNode && opponentNode.isValid) {
+                    opponentNode.opacity = 128;
+                    opponentNode.scale = 1;
+                }
             }
         }
         this.updateRhythmHud();
     }
 
     private updateRhythmHud() {
+        this.applyRhythmHudLayout();
         if (!this.rhythmLabel) return;
         if (!this.isRhythmLevel()) {
             this.rhythmLabel.string = "";
             if (this.rhythmAiLabel) this.rhythmAiLabel.string = "";
             if (this.judgeLabel) this.judgeLabel.string = "";
+            this.refreshRhythmSplitHud();
             return;
         }
         this.rhythmLabel.string = "YOU  SCORE " + this.rhythmScore
@@ -1000,6 +1190,7 @@ export default class GameMgr extends cc.Component {
             + "   HIT " + (this.rhythmPerfect + this.rhythmGood + this.rhythmBad)
             + "   MISS " + this.rhythmMiss;
         this.updateRhythmAiHud();
+        this.refreshRhythmSplitHud();
     }
 
     private rhythmSummary(): string {
@@ -1099,6 +1290,7 @@ export default class GameMgr extends cc.Component {
                     const ys = r.laneYs && r.laneYs.length ? r.laneYs : [-212, -106, 0, 106, 212];
                     y = ys[Math.max(0, Math.min(ys.length - 1, r.startLane || 0))];
                 }
+                if (this.rhythmSplitBattle) y = this.rhythmOpponentYFromPlayerY(y);
                 this.rhythmAiNode.setPosition(this.level.start.x - 72, y);
                 this.rhythmAiNode.scaleX = 1;
                 this.rhythmAiNode.scaleY = 1;
@@ -1145,12 +1337,14 @@ export default class GameMgr extends cc.Component {
         if (r.style === "gravity-collect") {
             const ys = r.laneYs && r.laneYs.length ? r.laneYs : [-212, -106, 0, 106, 212];
             this.rhythmAiLaneIndex = Math.max(0, Math.min(ys.length - 1, note.trackLane || 0));
-            cc.tween(this.rhythmAiNode).to(0.07, { y: ys[this.rhythmAiLaneIndex] }, { easing: "sineOut" }).start();
+            const targetY = this.rhythmSplitBattle ? this.rhythmOpponentYFromPlayerY(ys[this.rhythmAiLaneIndex]) : ys[this.rhythmAiLaneIndex];
+            cc.tween(this.rhythmAiNode).to(0.07, { y: targetY }, { easing: "sineOut" }).start();
             return;
         }
         if (r.style === "jump-flip") {
             if ((note.action || "") === "flip") this.rhythmAiRailDir *= -1;
-            const railY = this.rhythmAiRailDir > 0 ? ((r.ceilingY || 240) - 18) : ((r.floorY || -240) + 18);
+            const playerRailY = this.rhythmAiRailDir > 0 ? ((r.ceilingY || 240) - 18) : ((r.floorY || -240) + 18);
+            const railY = this.rhythmSplitBattle ? this.rhythmOpponentYFromPlayerY(playerRailY) : playerRailY;
             this.rhythmAiNode.scaleY = this.rhythmAiRailDir > 0 ? -1 : 1;
             if ((note.action || "") === "jump") {
                 const peak = railY - this.rhythmAiRailDir * (r.jumpHeight || 62);
@@ -1184,6 +1378,13 @@ export default class GameMgr extends cc.Component {
             this.rhythmAiCombo = 0;
         }
         if (this.rhythmAiCombo > this.rhythmAiMaxCombo) this.rhythmAiMaxCombo = this.rhythmAiCombo;
+        const opponentNode = (note as any).opponentNode as cc.Node;
+        if (opponentNode && opponentNode.isValid) {
+            opponentNode.stopAllActions();
+            opponentNode.opacity = judgement === "miss" ? 35 : 72;
+            opponentNode.scale = judgement === "miss" ? 0.75 : 1.18;
+            cc.tween(opponentNode).to(0.12, { scale: 1 }).start();
+        }
         if (judgement !== "miss") this.moveRhythmAiForNote(note);
         this.updateRhythmAiHud();
     }
@@ -1664,11 +1865,11 @@ export default class GameMgr extends cc.Component {
         Sfx.play("win", 0.9);
         if (this.isRhythmLevel()) Sfx.stopBgm();
         // win animation: portal sucks the runner in + celebration burst
-        Fx.confetti(this.world, this.level.goal.x, 0);
+        Fx.confetti(this.world, this.level.goal.x, this.level.goal.y || 0);
         if (winner && winner.node && winner.node.isValid) {
             winner.node.stopAllActions();
             cc.tween(winner.node)
-                .to(0.55, { x: this.level.goal.x, y: 0, scale: 0, angle: 360 }, { easing: "sineIn" })
+                .to(0.55, { x: this.level.goal.x, y: this.level.goal.y || 0, scale: 0, angle: 360 }, { easing: "sineIn" })
                 .start();
         }
         const custom = GameData.currentLevel === 0;
@@ -1863,7 +2064,7 @@ export default class GameMgr extends cc.Component {
             this.playersCollide();
         }
         // online: collide with remote players who also opted in
-        if (GameData.settings.onlineCollide) {
+        if (GameData.settings.onlineCollide && !(this.rhythmSplitBattle && this.isRhythmLevel())) {
             this.ghostsCollide();
         }
     }
