@@ -23,6 +23,10 @@ export default class GameData {
     // the classic numbered path "levels/level" + currentLevel.
     static currentLevelPath = "";
 
+    // A mid-run save state waiting to be applied by GameMgr after the level
+    // is built (set by the pause-menu LOAD STATE flow).
+    static pendingState: any = null;
+
     static readonly CUSTOM_KEY = "gfr_custom_level";
 
     static hasCustomLevel(): boolean {

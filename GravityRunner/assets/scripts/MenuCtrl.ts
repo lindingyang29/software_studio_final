@@ -122,7 +122,7 @@ export default class MenuCtrl extends cc.Component {
     }
 
     private progressSig(): string {
-        return GameData.getUnlocked() + "|" + GameData.getBestDist() + "|" + Fb.activeSlot;
+        return GameData.getUnlocked() + "|" + GameData.getBestDist();
     }
 
     private rebuildUi() {
@@ -600,6 +600,71 @@ export default class MenuCtrl extends cc.Component {
         this.buildSettingsPanel();
     }
 
+    private closestIndex(values: number[], v: number): number {
+        let best = 0;
+        for (let i = 1; i < values.length; i++) {
+            if (Math.abs(values[i] - v) < Math.abs(values[best] - v)) best = i;
+        }
+        return best;
+    }
+
+    // A draggable horizontal slider row: track + fill + knob + live value.
+    // onChange fires on every drag step (live preview), onRelease on let-go.
+    private sliderRow(panel: cc.Node, y: number, name: string,
+        get: () => number, set: (v: number) => void,
+        min: number, max: number, step: number,
+        fmt: (v: number) => string,
+        onChange?: () => void, onRelease?: () => void) {
+
+        const white = cc.color(235, 240, 255);
+        const cyan = cc.color(127, 247, 255);
+
+        const row = this.sprite(panel, "white", 0, y, 520, 40, cc.color(24, 34, 76));
+        this.label(row, name, -240, 0, 16, white, 0);
+        const valNode = this.label(row, "", 240, 0, 16, cyan, 1);
+        const valLb = valNode.getComponent(cc.Label);
+
+        const trackW = 180;
+        const trackX = 52; // track center within the row
+        const left = trackX - trackW / 2;
+        this.sprite(row, "white", trackX, 0, trackW, 5, cc.color(60, 70, 110));
+        const fill = this.sprite(row, "white", left, 0, 1, 5, cyan);
+        fill.anchorX = 0;
+        const knob = this.sprite(row, "white", left, 0, 12, 24, white);
+
+        const apply = (raw: number, fromDrag: boolean) => {
+            const q = min + Math.round((raw - min) / step) * step;
+            const v = Math.max(min, Math.min(max, Math.round(q * 1000) / 1000));
+            set(v);
+            const t = (max > min) ? (v - min) / (max - min) : 0;
+            knob.x = left + t * trackW;
+            fill.width = Math.max(1, t * trackW);
+            valLb.string = fmt(v);
+            if (fromDrag && onChange) onChange();
+        };
+        apply(get(), false);
+
+        const hit = new cc.Node("hit");
+        hit.setContentSize(trackW + 44, 40);
+        hit.setPosition(trackX, 0);
+        row.addChild(hit);
+        const drag = (e: cc.Event.EventTouch) => {
+            e.stopPropagation();
+            const local = hit.convertToNodeSpaceAR(e.getLocation());
+            const t = Math.max(0, Math.min(1, (local.x + trackW / 2) / trackW));
+            apply(min + t * (max - min), true);
+        };
+        hit.on(cc.Node.EventType.TOUCH_START, drag);
+        hit.on(cc.Node.EventType.TOUCH_MOVE, drag);
+        const release = (e: cc.Event.EventTouch) => {
+            e.stopPropagation();
+            GameData.saveSettings();
+            if (onRelease) onRelease();
+        };
+        hit.on(cc.Node.EventType.TOUCH_END, release);
+        hit.on(cc.Node.EventType.TOUCH_CANCEL, release);
+    }
+
     private buildSettingsPanel() {
         const white = cc.color(235, 240, 255);
         const cyan = cc.color(127, 247, 255);
@@ -613,68 +678,55 @@ export default class MenuCtrl extends cc.Component {
         panel.on(cc.Node.EventType.TOUCH_START, (e: cc.Event) => { e.stopPropagation(); });
 
         this.label(panel, "SETTINGS", 0, 268, 30, orange);
-        this.label(panel, "click a row to change", 0, 236, 14, cc.color(110, 120, 150));
+        this.label(panel, "drag the sliders", 0, 236, 14, cc.color(110, 120, 150));
 
         const s = GameData.settings;
         const pct = (v: number) => Math.round(v * 100) + "%";
-        const rows: { name: string; value: () => string; next: () => void }[] = [
-            {
-                name: "SFX VOLUME",
-                value: () => pct(s.sfx),
-                next: () => { s.sfx = s.sfx >= 1 ? 0 : Math.min(1, s.sfx + 0.25); Sfx.play("crystal", 0.8); }
-            },
-            {
-                name: "MUSIC VOLUME",
-                value: () => pct(s.bgm),
-                next: () => { s.bgm = s.bgm >= 1 ? 0 : Math.min(1, s.bgm + 0.2); Sfx.applyBgmVolume(); }
-            },
-            {
-                name: "GAME SPEED",
-                value: () => pct(s.speed),
-                next: () => { s.speed = s.speed >= 1.4 ? 0.6 : Math.round((s.speed + 0.2) * 10) / 10; }
-            },
-            {
-                name: "COLOR SCHEME",
-                value: () => SCHEMES[s.scheme].name,
-                next: () => { s.scheme = (s.scheme + 1) % SCHEMES.length; this.applyBgTint(); }
-            },
-            {
-                name: "BRIGHTNESS",
-                value: () => pct(s.brightness),
-                next: () => { s.brightness = s.brightness <= 0.6 ? 1 : Math.round((s.brightness - 0.2) * 10) / 10; this.applyBgTint(); }
-            },
-            {
-                name: "RHYTHM TRACK GAP",
-                value: () => this.rhythmGapText(),
-                next: () => { this.changeRhythmGap(1); }
-            },
-            {
-                name: "RHYTHM FLOW SPEED",
-                value: () => this.rhythmSpeedText(),
-                next: () => { this.changeRhythmSpeedScale(1); }
-            },
-            {
-                name: "RHYTHM JUMP KEYS",
-                value: () => this.rhythmJumpKeyText(),
-                next: () => { this.closePanels(); this.buildRhythmKeyPanel("jump"); }
-            },
-            {
-                name: "RHYTHM FLIP KEYS",
-                value: () => this.rhythmFlipKeyText(),
-                next: () => { this.closePanels(); this.buildRhythmKeyPanel("flip"); }
-            }
-        ];
+        let rowY = 188;
+        const nextY = () => { const r = rowY; rowY -= 42; return r; };
 
-        for (let i = 0; i < rows.length; i++) {
-            const row = rows[i];
-            const y = 188 - i * 42;
+        this.sliderRow(panel, nextY(), "SFX VOLUME",
+            () => s.sfx, (v) => { s.sfx = v; }, 0, 1, 0.05, pct,
+            null, () => Sfx.play("crystal", 0.8));
+        this.sliderRow(panel, nextY(), "MUSIC VOLUME",
+            () => s.bgm, (v) => { s.bgm = v; }, 0, 1, 0.05, pct,
+            () => Sfx.applyBgmVolume());
+        this.sliderRow(panel, nextY(), "GAME SPEED",
+            () => s.speed, (v) => { s.speed = v; }, 0.6, 1.4, 0.1, pct);
+        this.sliderRow(panel, nextY(), "COLOR SCHEME",
+            () => s.scheme, (v) => { s.scheme = Math.round(v); }, 0, SCHEMES.length - 1, 1,
+            (v) => SCHEMES[Math.round(v)].name,
+            () => this.applyBgTint());
+        this.sliderRow(panel, nextY(), "BRIGHTNESS",
+            () => s.brightness, (v) => { s.brightness = v; }, 0.6, 1, 0.05, pct,
+            () => this.applyBgTint());
+        const gaps = this.rhythmGapValues;
+        this.sliderRow(panel, nextY(), "RHYTHM TRACK GAP",
+            () => this.closestIndex(gaps, s.rhythmGap),
+            (v) => { s.rhythmGap = gaps[Math.round(v)]; },
+            0, gaps.length - 1, 1,
+            (v) => String(gaps[Math.round(v)]));
+        const spds = this.rhythmSpeedValues;
+        this.sliderRow(panel, nextY(), "RHYTHM FLOW SPEED",
+            () => this.closestIndex(spds, s.rhythmSpeedScale),
+            (v) => { s.rhythmSpeedScale = spds[Math.round(v)]; },
+            0, spds.length - 1, 1,
+            (v) => spds[Math.round(v)].toFixed(1) + "x");
+
+        // key bindings open their own capture panel — stay click rows
+        const keyRows = [
+            { name: "RHYTHM JUMP KEYS", value: () => this.rhythmJumpKeyText(), kind: "jump" },
+            { name: "RHYTHM FLIP KEYS", value: () => this.rhythmFlipKeyText(), kind: "flip" }
+        ];
+        for (const kr of keyRows) {
+            const y = nextY();
             const rowNode = this.sprite(panel, "white", 0, y, 520, 40, cc.color(24, 34, 76));
-            this.label(rowNode, row.name, -240, 0, 17, white, 0);
-            const valNode = this.label(rowNode, row.value(), 240, 0, 17, cyan, 1);
+            this.label(rowNode, kr.name, -240, 0, 17, white, 0);
+            this.label(rowNode, kr.value() + "  >", 240, 0, 17, cyan, 1);
             rowNode.on(cc.Node.EventType.TOUCH_END, () => {
-                row.next();
-                GameData.saveSettings();
-                if (valNode && valNode.isValid) (valNode.getComponent(cc.Label)).string = row.value();
+                Sfx.play("click", 0.7);
+                this.closePanels();
+                this.buildRhythmKeyPanel(kr.kind);
             });
         }
 
@@ -768,9 +820,8 @@ export default class MenuCtrl extends cc.Component {
     private refreshAccount() {
         if (this.accountLabel && this.accountLabel.isValid) {
             const lb = this.accountLabel.getComponent(cc.Label);
-            const slot = Fb.activeSlotName();
             lb.string = !Fb.enabled() ? "OFFLINE MODE"
-                : Fb.user() ? "PLAYER: " + Fb.userName() + (slot ? "  [" + slot + "]" : "")
+                : Fb.user() ? "PLAYER: " + Fb.userName()
                 : "NOT LOGGED IN";
         }
         if (this.accountStatus && this.accountStatus.isValid) {
@@ -921,7 +972,7 @@ export default class MenuCtrl extends cc.Component {
         });
     }
 
-    // ---------- save slots panel ----------
+    // ---------- save states panel (mid-run saves; saving happens in-game) ----------
 
     private toggleSaves() {
         if (this.savesPanel) {
@@ -929,22 +980,75 @@ export default class MenuCtrl extends cc.Component {
             return;
         }
         this.closePanels();
-        this.buildSavesPanel();
+        this.buildSavesPanel(-1);
     }
 
-    private buildSavesPanel() {
+    // confirmIdx: slot whose DEL is in the two-click "SURE?" stage
+    private buildSavesPanel(confirmIdx: number) {
+        if (this.savesPanel) { this.savesPanel.destroy(); this.savesPanel = null; }
         const white = cc.color(235, 240, 255);
         const orange = cc.color(255, 181, 74);
-        const cyan = cc.color(127, 247, 255);
         const dim = cc.color(110, 120, 150);
 
-        const panel = this.sprite(this.node, "white", 0, 0, 620, 540, cc.color(10, 12, 26));
+        const panel = this.sprite(this.node, "white", 0, 0, 660, 540, cc.color(10, 12, 26));
         panel.opacity = 248;
         panel.zIndex = 50;
         panel.on(cc.Node.EventType.TOUCH_START, (e: cc.Event) => e.stopPropagation());
         this.savesPanel = panel;
 
-        this.label(panel, "SAVE SLOTS  (" + Fb.slotIds().length + "/8)", 0, 240, 26, orange);
+        this.label(panel, "SAVE STATES", 0, 240, 26, orange);
+        this.label(panel, Fb.user()
+            ? "stored in your account — save from the in-game PAUSE menu"
+            : "stored on this device — save from the in-game PAUSE menu", 0, 208, 13, dim);
+
+        const states = Fb.getStates();
+        let any = false;
+        for (let i = 0; i < Fb.MAX_STATES; i++) {
+            const st = states[i];
+            const y = 158 - i * 56;
+            const row = this.sprite(panel, "white", 0, y, 620, 46, cc.color(22, 30, 60));
+            let text = "#" + (i + 1) + "   ";
+            if (st) {
+                any = true;
+                const d = new Date(st.t || 0);
+                const pad = (v: number) => (v < 10 ? "0" + v : "" + v);
+                text += st.label + "   " + (d.getMonth() + 1) + "/" + d.getDate() + " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
+            } else {
+                text += "EMPTY";
+            }
+            this.label(row, text, -296, 0, 15, st ? white : dim, 0);
+            if (!st) continue;
+
+            const mk = (txt: string, x: number, color: cc.Color, cb: () => void) => {
+                const b = this.sprite(row, "white", x, 0, 84, 32, color);
+                this.label(b, txt, 0, 0, 13, white);
+                b.on(cc.Node.EventType.TOUCH_END, (e: cc.Event) => {
+                    e.stopPropagation();
+                    Sfx.play("click", 0.7);
+                    cb();
+                });
+            };
+            const idx = i;
+            mk("PLAY", 170, cc.color(20, 70, 40), () => {
+                GameData.players = st.pl || 1;
+                GameData.currentLevel = st.lv || 1;
+                GameData.currentLevelPath = st.path || "";
+                GameData.pendingState = st;
+                Fx.fadeTo("Game", this.node);
+            });
+            if (confirmIdx === idx) {
+                mk("SURE?", 265, cc.color(140, 40, 40), () => {
+                    Fb.saveState(idx, null);
+                    this.buildSavesPanel(-1);
+                });
+            } else {
+                mk("DEL", 265, cc.color(70, 25, 35), () => this.buildSavesPanel(idx));
+            }
+        }
+        if (!any) {
+            this.label(panel, "no save states yet — pause during a level and pick SAVE / LOAD STATE",
+                0, -190, 14, dim);
+        }
 
         const closeBtn = this.sprite(panel, "white", 0, -240, 160, 38, cc.color(50, 50, 60));
         this.label(closeBtn, "CLOSE", 0, 0, 17, white);
@@ -952,71 +1056,6 @@ export default class MenuCtrl extends cc.Component {
             Sfx.play("click", 0.8);
             this.closePanels();
         });
-
-        if (!Fb.user()) {
-            this.label(panel, "log in first (ACCOUNT panel)", 0, 40, 18, white);
-            return;
-        }
-
-        const nameEb = this.editBox(panel, -90, 196, 300, "slot name (for NEW / REN)", false);
-        const status = this.label(panel, "", 0, -205, 15, orange);
-        const say = (s: string) => { (status.getComponent(cc.Label)).string = s || ""; };
-
-        const newBtn = this.sprite(panel, "white", 180, 196, 130, 40, cc.color(20, 70, 40));
-        this.label(newBtn, "+ NEW", 0, 0, 16, white);
-        newBtn.on(cc.Node.EventType.TOUCH_END, () => {
-            Sfx.play("click", 0.8);
-            const err = Fb.createSlot(nameEb.string.trim());
-            if (err) { say(err); return; }
-            this.refreshAccount();
-            this.closePanels();
-            this.buildSavesPanel(); // re-render list
-        });
-
-        const ids = Fb.slotIds();
-        for (let i = 0; i < ids.length; i++) {
-            const id = ids[i];
-            const s = Fb.slots[id];
-            const active = id === Fb.activeSlot;
-            const y = 150 - i * 44;
-            const row = this.sprite(panel, "white", 0, y, 580, 38,
-                active ? cc.color(30, 60, 90) : cc.color(22, 30, 60));
-            this.label(row, (active ? "> " : "") + s.name, -270, 0, 16, active ? cyan : white, 0);
-            this.label(row, "Lv" + s.unlocked + "   " + s.best + "m", -60, 0, 14, dim, 0);
-            const mk = (text: string, x: number, color: cc.Color, cb: () => void) => {
-                const b = this.sprite(row, "white", x, 0, 62, 28, color);
-                this.label(b, text, 0, 0, 12, white);
-                b.on(cc.Node.EventType.TOUCH_END, (e: cc.Event) => {
-                    e.stopPropagation();
-                    Sfx.play("click", 0.7);
-                    cb();
-                });
-            };
-            mk("LOAD", 120, cc.color(20, 70, 40), () => {
-                const err = Fb.loadSlot(id);
-                if (err) { say(err); return; }
-                // reload the menu so level locks / endless best reflect the slot
-                cc.director.loadScene("Menu");
-            });
-            mk("SAVE", 190, cc.color(70, 55, 15), () => {
-                const err = Fb.overwriteSlot(id);
-                say(err ? err : "current progress saved to \"" + s.name + "\"");
-                this.refreshAccount();
-                this.closePanels();
-                this.buildSavesPanel();
-            });
-            mk("REN", 258, cc.color(40, 30, 70), () => {
-                const err = Fb.renameSlot(id, nameEb.string.trim());
-                if (err) { say(err); return; }
-                this.refreshAccount();
-                this.closePanels();
-                this.buildSavesPanel();
-            });
-        }
-
-        this.label(panel,
-            "LOAD = play this slot     SAVE = overwrite slot with current progress     REN = rename",
-            0, -175, 13, dim);
     }
 
     private toggleBoard() {
