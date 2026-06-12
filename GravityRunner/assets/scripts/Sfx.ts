@@ -30,6 +30,35 @@ export default class Sfx {
         Sfx.playMusic(track, true);
     }
 
+    private static escapeResourceName(name: string): string {
+        let out = "";
+        for (let i = 0; i < name.length; i++) {
+            const c = name.charCodeAt(i);
+            out += c > 127 ? ("#U" + c.toString(16).padStart(4, "0")) : name.charAt(i);
+        }
+        return out;
+    }
+
+    private static safeResourceName(name: string): string {
+        const s = String(name || "").replace(/#U([0-9a-fA-F]{4})/g, (_m, h) => "u" + String(h).toLowerCase());
+        let out = "";
+        for (let i = 0; i < s.length; i++) {
+            const c = s.charCodeAt(i);
+            out += c > 127 ? ("u" + c.toString(16).padStart(4, "0")) : s.charAt(i);
+        }
+        return out;
+    }
+
+    private static musicCandidates(name: string): string[] {
+        const norm = String(name || "bgm_menu").trim().replace(/^audio\//, "").replace(/\.(ogg|wav|mp3)$/i, "");
+        const safe = Sfx.safeResourceName(norm);
+        const esc = Sfx.escapeResourceName(norm);
+        const arr = [norm, safe, esc];
+        const out: string[] = [];
+        for (const p of arr) if (p && out.indexOf(p) < 0) out.push(p);
+        return out;
+    }
+
     // Plays a named music clip from resources/audio/<name>.
     // Used by rhythm levels so the chart can start exactly when the run starts.
     static playMusic(name: string, loop: boolean = true, onStarted?: () => void) {
@@ -42,19 +71,29 @@ export default class Sfx {
 
         Sfx.stopBgm();
         Sfx.loadingMusicName = name;
-        cc.resources.load("audio/" + name, cc.AudioClip, (err, clip) => {
+        const candidates = Sfx.musicCandidates(name);
+        const tryLoad = (i: number) => {
             if (Sfx.loadingMusicName !== name) return;
-            if (err || !clip) {
-                cc.warn("music load failed: audio/" + name, err);
+            if (i >= candidates.length) {
+                cc.warn("music load failed: audio/" + candidates.join(" | audio/"));
                 Sfx.loadingMusicName = "";
                 if (onStarted) onStarted(); // keep the level playable even without audio
                 return;
             }
-            Sfx.bgmId = cc.audioEngine.play(clip as any, loop, GameData.settings.bgm);
-            Sfx.musicName = name;
-            Sfx.loadingMusicName = "";
-            if (onStarted) onStarted();
-        });
+            const p = candidates[i];
+            cc.resources.load("audio/" + p, cc.AudioClip, (err, clip) => {
+                if (Sfx.loadingMusicName !== name) return;
+                if (err || !clip) {
+                    tryLoad(i + 1);
+                    return;
+                }
+                Sfx.bgmId = cc.audioEngine.play(clip as any, loop, GameData.settings.bgm);
+                Sfx.musicName = name;
+                Sfx.loadingMusicName = "";
+                if (onStarted) onStarted();
+            });
+        };
+        tryLoad(0);
     }
 
     static getMusicTime(): number {

@@ -229,14 +229,73 @@ export default class GameMgr extends cc.Component {
             return;
         }
         const levelPath = GameData.currentLevelPath || ("levels/level" + GameData.currentLevel);
-        cc.resources.load(levelPath, cc.JsonAsset, (err, asset: cc.JsonAsset) => {
-            if (err) {
-                this.setMsg("LEVEL LOAD ERROR", levelPath);
-                cc.error(err);
+        this.loadLevelJson(levelPath);
+    }
+
+    private normalizeResourcePath(path: string): string {
+        let p = String(path || "").trim().replace(/\\/g, "/");
+        p = p.replace(/^db:\/\/assets\/resources\//, "");
+        p = p.replace(/^assets\/resources\//, "");
+        p = p.replace(/^resources\//, "");
+        p = p.replace(/^\/+/, "");
+        p = p.replace(/\.json$/i, "");
+        return p;
+    }
+
+    private cocosEscapedResourcePath(path: string): string {
+        // Legacy fallback: older rooms / imported assets may still use #Uxxxx.
+        let out = "";
+        for (let i = 0; i < path.length; i++) {
+            const c = path.charCodeAt(i);
+            out += c > 127 ? ("#U" + c.toString(16).padStart(4, "0")) : path.charAt(i);
+        }
+        return out;
+    }
+
+    private safeResourcePath(path: string): string {
+        // Stable resource names: avoid '#', because it can behave like a URL
+        // fragment in web builds.  #U5343 and Unicode both map to u5343.
+        const s = String(path || "").replace(/#U([0-9a-fA-F]{4})/g, (_m, h) => "u" + String(h).toLowerCase());
+        let out = "";
+        for (let i = 0; i < s.length; i++) {
+            const c = s.charCodeAt(i);
+            out += c > 127 ? ("u" + c.toString(16).padStart(4, "0")) : s.charAt(i);
+        }
+        return out;
+    }
+
+    private resourcePathCandidates(path: string): string[] {
+        const norm = this.normalizeResourcePath(path);
+        const safe = this.safeResourcePath(norm);
+        const esc = this.cocosEscapedResourcePath(norm);
+        const arr = [norm, safe, esc];
+        const out: string[] = [];
+        for (const p of arr) if (p && out.indexOf(p) < 0) out.push(p);
+        return out;
+    }
+
+    private loadLevelJson(path: string) {
+        const candidates = this.resourcePathCandidates(path);
+        let lastErr: any = null;
+        const tryLoad = (i: number) => {
+            if (i >= candidates.length) {
+                this.setMsg("LEVEL LOAD ERROR", candidates.join("  |  "));
+                if (lastErr) cc.error(lastErr);
                 return;
             }
-            this.startLevel(asset.json);
-        });
+            const p = candidates[i];
+            cc.resources.load(p, cc.JsonAsset, (err, asset: cc.JsonAsset) => {
+                if (err || !asset) {
+                    lastErr = err;
+                    cc.warn("level load failed: " + p, err);
+                    tryLoad(i + 1);
+                    return;
+                }
+                if (GameData.currentLevelPath) GameData.currentLevelPath = p;
+                this.startLevel(asset.json);
+            });
+        };
+        tryLoad(0);
     }
 
     private startLevel(data: any) {
@@ -607,8 +666,9 @@ export default class GameMgr extends cc.Component {
         } else if (this.isRhythmFightOnlineBattle()) {
             this.rhythmAttackSeq++;
             this.rhythmAttackType = type;
-            this.rhythmAttackAt = Date.now();
+            this.rhythmAttackAt = Fb.serverNow();
             this.applyOpponentRhythmInterference(type, "OPPONENT");
+            this.pushLiveNow();
         } else if (this.isRhythmAiBattle()) {
             this.rhythmAiInterfereT = Math.max(this.rhythmAiInterfereT, this.rhythmAttackDuration(type));
             this.rhythmAiInterfereType = type;
@@ -1022,7 +1082,12 @@ export default class GameMgr extends cc.Component {
             if (this.isRhythmFightOnlineBattle()) {
                 const atkSeq = Number(d.atkSeq) || 0;
                 const atkAt = Number(d.atkAt) || 0;
-                if (atkSeq > 0 && this.rhythmRemoteAttackSeq[e.uid] !== atkSeq && atkAt > Date.now() - 2200) {
+                // Attack events are sent as edge-triggered seq numbers.
+                // Use server-synced time and a generous window, otherwise two
+                // clients with slightly different clocks can silently drop jams.
+                if (atkSeq > 0
+                    && this.rhythmRemoteAttackSeq[e.uid] !== atkSeq
+                    && (!atkAt || atkAt > Fb.serverNow() - 7000)) {
                     this.rhythmRemoteAttackSeq[e.uid] = atkSeq;
                     this.applyRhythmInterference(this.normalizeRhythmAttackType(String(d.atkType || "blind")), d.n || "opponent");
                 }
@@ -2578,6 +2643,34 @@ export default class GameMgr extends cc.Component {
 
     // ---------- per-frame ----------
 
+    private currentLivePayload(me: Player): any {
+        const fight = this.isRhythmFightOnlineBattle();
+        const now = Fb.serverNow();
+        return {
+            x: Math.round(me.node.x),
+            y: Math.round(me.node.y),
+            sy: me.node.scaleY < 0 ? -1 : 1,
+            col: GameData.settings.onlineCollide ? 1 : 0,
+            room: GameData.roomCode || null,
+            lv: this.liveLevelKey(),
+            n: Fb.userName(),
+            score: this.isRhythmLevel() ? this.rhythmScore : 0,
+            combo: this.isRhythmLevel() ? this.rhythmCombo : 0,
+            mode: this.isRhythmLevel() ? "rhythm" : "runner",
+            atkSeq: fight ? this.rhythmAttackSeq : 0,
+            atkType: fight ? this.rhythmAttackType : "",
+            atkAt: fight ? this.rhythmAttackAt : 0,
+            t: now
+        };
+    }
+
+    private pushLiveNow() {
+        if (!this.liveOn || !Fb.user()) return;
+        const me = this.anyAlive();
+        if (!me) return;
+        Fb.liveSet(this.currentLivePayload(me));
+    }
+
     update(dt: number) {
         // keep HUD glued to the camera viewport
         if (this.hud && this.cameraNode) {
@@ -2627,22 +2720,7 @@ export default class GameMgr extends cc.Component {
                     this.liveAccum = 0;
                     const me = this.anyAlive();
                     if (me) {
-                        Fb.liveSet({
-                            x: Math.round(me.node.x),
-                            y: Math.round(me.node.y),
-                            sy: me.node.scaleY < 0 ? -1 : 1,
-                            col: GameData.settings.onlineCollide ? 1 : 0,
-                            room: GameData.roomCode || null,
-                            lv: this.liveLevelKey(),
-                            n: Fb.userName(),
-                            score: this.isRhythmLevel() ? this.rhythmScore : 0,
-                            combo: this.isRhythmLevel() ? this.rhythmCombo : 0,
-                            mode: this.isRhythmLevel() ? "rhythm" : "runner",
-                            atkSeq: this.isRhythmFightOnlineBattle() ? this.rhythmAttackSeq : 0,
-                            atkType: this.isRhythmFightOnlineBattle() ? this.rhythmAttackType : "",
-                            atkAt: this.isRhythmFightOnlineBattle() ? this.rhythmAttackAt : 0,
-                            t: Date.now()
-                        });
+                        Fb.liveSet(this.currentLivePayload(me));
                     }
                 }
             }
