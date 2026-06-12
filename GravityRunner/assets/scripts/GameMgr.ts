@@ -213,7 +213,7 @@ export default class GameMgr extends cc.Component {
         this.applyRotationForX(this.level.start.x, true);
         const titlePrefix = this.isRhythmLevel() ? "RHYTHM — "
             : (GameData.currentLevel === 0 ? "CUSTOM — " : "LEVEL " + GameData.currentLevel + " — ");
-        this.nameLabel.string = titlePrefix + this.level.name
+        this.nameLabel.string = (this.isRhythmLevel() ? "RHYTHM" : (GameData.currentLevel === 0 ? "CUSTOM" : "LEVEL " + GameData.currentLevel))
             + (this.isRhythmAiBattle() ? "   [VS AI]" : "")
             + (this.isRhythmOnlineBattle() ? "   [ONLINE]" : "")
             + (GameData.players === 2 && !this.isRhythmLevel() ? "   [2P]" : "");
@@ -701,6 +701,8 @@ export default class GameMgr extends cc.Component {
         this.spawnPlayersAndCamera(1e15);
         this.applyRotationForX(this.level.start.x, true);
         this.nameLabel.string = "ENDLESS MODE" + (GameData.players === 2 ? "   [2P]" : "");
+        this.distLabel.node.active = true;
+        this.distLabel.string = "0m   BEST " + GameData.getBestDist() + "m";
         this.refreshHud();
         this.state = "ready";
         this.setMsg("PRESS SPACE TO RUN",
@@ -814,10 +816,11 @@ export default class GameMgr extends cc.Component {
         this.hud.addChild(this.slowOverlay, -1);
 
         this.nameLabel = this.makeLabel(this.hud, -450, 284, 22, cyan, 0);
-        this.crystalLabel = this.makeLabel(this.hud, -80, 284, 22, white, 0);
-        this.deathLabel = this.makeLabel(this.hud, 205, 284, 22, pink, 0);
+        this.crystalLabel = this.makeLabel(this.hud, -210, 284, 22, white, 0);
+        this.deathLabel = this.makeLabel(this.hud, 80, 284, 22, pink, 0);
         this.timeLabel = this.makeLabel(this.hud, 450, 284, 24, orange, 1);
-        this.distLabel = this.makeLabel(this.hud, 0, 284, 26, orange);
+        this.distLabel = this.makeLabel(this.hud, 0, -286, 26, orange);
+        this.distLabel.node.active = false;
         this.rhythmLabel = this.makeLabel(this.hud, 0, -256, 22, orange);
         this.rhythmAiLabel = this.makeLabel(this.hud, 0, 256, 18, cyan);
         this.rhythmSplitLine = new cc.Node("rhythmSplitLine");
@@ -2052,6 +2055,7 @@ export default class GameMgr extends cc.Component {
             this.level.speed = this.endlessBaseSpeed() + Math.min(240, this.distPx / 80);
             const lead = this.anyAlive();
             if (lead && lead.node.x > this.distPx) this.distPx = lead.node.x;
+            this.distLabel.node.active = true;
             this.distLabel.string = Math.floor(this.distPx / 10) + "m   BEST " + GameData.getBestDist() + "m";
             const camX = this.cameraNode.x;
             while (this.gen.getX() < camX + 1700) {
