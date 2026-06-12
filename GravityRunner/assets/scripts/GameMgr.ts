@@ -58,6 +58,9 @@ export default class GameMgr extends cc.Component {
 
     // synced room start (server-clock timestamp; 0 = not a room race)
     private roomT0 = 0;
+    private rhythmServerStartT0 = 0;
+    private rhythmSyncAccum = 0;
+    private rhythmLastHardSync = 0;
 
     // online ghosts (gvx/gvy = local velocity estimate, col = remote opted in to collision)
     private ghosts: { [uid: string]: { node: cc.Node; tx: number; ty: number; tsy: number; gvx: number; gvy: number; col: boolean; lastT: number; rxT: number; score: number; combo: number; name: string } } = {};
@@ -843,12 +846,12 @@ export default class GameMgr extends cc.Component {
         const floorY0 = Number(r.floorY) || -140;
         const ceilingY0 = Number(r.ceilingY) || 140;
         const gap = Math.max(1, Math.abs(ceilingY0 - floorY0));
-        // For VS modes, squeeze both tracks closer to the center so HUD text
-        // and edge decorations do not cover important notes near the top/bottom.
-        // This keeps a clearer neutral area around the middle divider.
-        this.rhythmSplitYScale = Math.min(0.82, 220 / gap);
-        this.rhythmSplitPlayerOffset = -130;
-        this.rhythmSplitOpponentOffset = 130;
+        // VS/FIGHT needs enough vertical separation.  If the two tracks are too
+        // compressed, a small jump on one rail can touch the opposite rail's red
+        // note.  Keep the tracks closer than solo, but leave a real neutral gap.
+        this.rhythmSplitYScale = Math.min(0.78, 230 / gap);
+        this.rhythmSplitPlayerOffset = -150;
+        this.rhythmSplitOpponentOffset = 150;
         this.rhythmSplitBattle = true;
 
         const fy = (y: number) => this.rhythmSplitYFromOriginal(Number(y) || 0, "player");
@@ -1548,6 +1551,10 @@ export default class GameMgr extends cc.Component {
                 this.skill(1, "slam");
                 break;
             case cc.macro.KEY.r:
+                if (this.onlineRhythmLocksPause()) {
+                    this.showOnlineLockedMessage("restart");
+                    break;
+                }
                 this.fullRestart();
                 break;
             case cc.macro.KEY.escape:
@@ -1623,7 +1630,24 @@ export default class GameMgr extends cc.Component {
         }
     }
 
+    private onlineRhythmLocksPause(): boolean {
+        return !!(this.isRhythmLevel() && this.isRhythmOnlineBattle()
+            && (this.state === "ready" || this.state === "loading" || this.state === "run"));
+    }
+
+    private showOnlineLockedMessage(kind: string) {
+        if (!this.isRhythmLevel()) return;
+        this.setMsg("ONLINE SYNC", kind + " disabled in online rhythm battle");
+        this.scheduleOnce(() => {
+            if (this.state === "run" || this.state === "ready" || this.state === "loading") this.setMsg("", "");
+        }, 1.0);
+    }
+
     private togglePause() {
+        if (this.onlineRhythmLocksPause()) {
+            this.showOnlineLockedMessage("pause");
+            return;
+        }
         if (this.state === "run") {
             this.state = "paused";
             if (this.isRhythmLevel()) Sfx.pauseMusic();
@@ -1689,6 +1713,10 @@ export default class GameMgr extends cc.Component {
     }
 
     private fullRestart() {
+        if (this.onlineRhythmLocksPause()) {
+            this.showOnlineLockedMessage("restart");
+            return;
+        }
         if (this.state === "loading" || this.players.length === 0) return;
         GameData.carriedHealth = 0;
         if (this.endless) {
@@ -1750,7 +1778,11 @@ export default class GameMgr extends cc.Component {
 
     private startRhythmRun() {
         if (!this.isRhythmLevel()) return;
+        const syncedStart = this.rhythmServerStartT0;
         this.resetRhythmState(true);
+        this.rhythmServerStartT0 = syncedStart;
+        this.rhythmSyncAccum = 0;
+        this.rhythmLastHardSync = 0;
         this.time = 0;
         this.refreshHud();
         this.state = "loading";
@@ -1758,6 +1790,10 @@ export default class GameMgr extends cc.Component {
         Sfx.playMusic(this.level.rhythm.audio || "rhythm_song", false, () => {
             if (!this.node || !this.node.isValid || !this.isRhythmLevel()) return;
             if (this.state !== "loading") return;
+            if (this.rhythmServerStartT0 > 0) {
+                const target = Math.max(0, (Fb.serverNow() - this.rhythmServerStartT0) / 1000);
+                Sfx.seekMusic(target);
+            }
             this.state = "run";
             this.setMsg("", "");
         });
@@ -2297,15 +2333,24 @@ export default class GameMgr extends cc.Component {
     private playerTouchesRhythmNote(note: any): boolean {
         const p = this.players[0];
         if (!p || !p.alive || !note || !note.node || !note.node.isValid) return false;
+
+        // Split-screen safety: the local player may only judge the lower chart.
+        // This prevents a jump near the center line from eating the opponent's
+        // visual notes or any red note that was pushed across the divider.
+        if (this.rhythmSplitBattle && note.node.y > -8) return false;
+
+        // Red jump notes must belong to the rail the player is currently on.
+        // Blue flip notes intentionally keep pure visual collision, because the
+        // player can be changing rails during the same frame the blue note is hit.
+        if ((note.action || "") === "jump" && (p as any).getLane) {
+            const lane = (note.lane === "ceiling" || Number(note.trackLane) === 1) ? "ceiling" : "floor";
+            if ((p as any).getLane() !== lane) return false;
+        }
+
         const dx = Math.abs(p.node.x - note.node.x);
         const dy = Math.abs(p.node.y - note.node.y);
-
-        // Judge jump/flip charts by the visible body-vs-note overlap.  Requiring
-        // the rail string to match as well caused false MISSes when the player
-        // was visibly touching a blue flip note during the same frame as a rail
-        // transition or a split-screen coordinate transform.
-        const rx = note.action === "flip" ? 64 : 58;
-        const ry = note.action === "flip" ? 60 : 56;
+        const rx = note.action === "flip" ? 64 : 54;
+        const ry = note.action === "flip" ? 60 : 48;
         return dx <= rx && dy <= ry;
     }
 
@@ -2778,6 +2823,23 @@ export default class GameMgr extends cc.Component {
         Fb.liveSet(this.currentLivePayload(me));
     }
 
+    private syncOnlineRhythmMusic(dt: number) {
+        if (!this.isRhythmOnlineBattle() || this.rhythmServerStartT0 <= 0 || this.state !== "run") return;
+        this.rhythmSyncAccum += dt;
+        if (this.rhythmSyncAccum < 0.45) return;
+        this.rhythmSyncAccum = 0;
+        const target = Math.max(0, (Fb.serverNow() - this.rhythmServerStartT0) / 1000);
+        const cur = Sfx.getMusicTime();
+        const drift = target - cur;
+        // Small drifts are harmless; hard-correct larger desyncs so host and
+        // guest judge the same note windows.  Limit hard sync frequency so the
+        // music does not stutter on unstable networks.
+        if (Math.abs(drift) > 0.18 && Math.abs(target - this.rhythmLastHardSync) > 1.5) {
+            Sfx.seekMusic(target);
+            this.rhythmLastHardSync = target;
+        }
+    }
+
     update(dt: number) {
         // keep HUD glued to the camera viewport
         if (this.hud && this.cameraNode) {
@@ -2794,12 +2856,15 @@ export default class GameMgr extends cc.Component {
             this.cameraNode.y = this.shakeT <= 0 ? 0
                 : (Math.random() * 2 - 1) * 16 * (this.shakeT / 0.35);
         }
+        this.syncOnlineRhythmMusic(dt);
         // room race countdown (server clock)
         if (this.state === "ready" && this.roomT0 > 0) {
             const remain = (this.roomT0 - Fb.serverNow()) / 1000;
             if (remain <= 0) {
+                const startT0 = this.roomT0;
                 this.roomT0 = 0;
                 if (this.isRhythmLevel()) {
+                    this.rhythmServerStartT0 = startT0;
                     this.startRhythmRun();
                 } else {
                     this.state = "run";
