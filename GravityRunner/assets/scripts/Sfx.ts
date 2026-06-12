@@ -1,6 +1,6 @@
 import GameData from "./GameData";
 
-// Tiny audio helper. Clips live in assets/resources/audio/<name>.<ext>.
+// Tiny audio helper. Clips live in assets/resources/audio/<name>.wav (or .mp3).
 // All volumes are scaled by the user's settings (GameData.settings).
 export default class Sfx {
     private static clips: { [name: string]: cc.AudioClip } = {};
@@ -24,15 +24,16 @@ export default class Sfx {
         if (clip && v > 0) cc.audioEngine.play(clip, false, v);
     }
 
-    // BGM is optional: drop a file at resources/audio/bgm.mp3/.ogg and this picks it up.
-    static playBgm() {
-        Sfx.playMusic("bgm", true);
+    // Per-scene looping BGM: pass a track name under resources/audio/
+    // (e.g. "bgm_menu", "bgm_game"). Re-calling with the same track is a no-op.
+    static playBgm(track: string = "bgm_menu") {
+        Sfx.playMusic(track, true);
     }
 
     // Plays a named music clip from resources/audio/<name>.
     // Used by rhythm levels so the chart can start exactly when the run starts.
     static playMusic(name: string, loop: boolean = true, onStarted?: () => void) {
-        if (!name) name = "bgm";
+        if (!name) name = "bgm_menu";
         if (Sfx.bgmId >= 0 && Sfx.musicName === name) {
             Sfx.applyBgmVolume();
             if (onStarted) onStarted();

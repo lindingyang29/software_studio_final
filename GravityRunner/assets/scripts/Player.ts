@@ -43,6 +43,8 @@ export default class Player extends cc.Component {
     private brakeCd = 0;
     private ghostT = 0;
     private wasGrounded = true;
+    // decaying horizontal impulse from player-vs-player bumps
+    private pushVx = 0;
 
     private shieldNode: cc.Node = null;
     private magnetAura: cc.Node = null;
@@ -75,10 +77,13 @@ export default class Player extends cc.Component {
 
     reset() {
         this.node.stopAllActions();
-        // P2 trails slightly behind so the cubes don't overlap
-        this.node.setPosition(this.level.start.x - this.index * 60, this.level.start.y);
+        // P1 spawns on the floor, P2 on the ceiling (no overlap, ever)
+        const onCeiling = this.index === 1;
+        this.node.setPosition(this.level.start.x,
+            onCeiling ? -this.level.start.y : this.level.start.y);
         this.vy = 0;
-        this.gravityDir = -1;
+        this.pushVx = 0;
+        this.gravityDir = onCeiling ? 1 : -1;
         this.grounded = true;
         this.rhythmLaneIndex = this.nearestRhythmLane(this.level.start.y);
         this.rhythmTargetY = this.getRhythmLaneY(this.rhythmLaneIndex);
@@ -102,7 +107,7 @@ export default class Player extends cc.Component {
         this.node.active = true;
         this.node.opacity = 255;
         this.node.scaleX = 1;
-        this.node.scaleY = 1;
+        this.node.scaleY = this.gravityDir > 0 ? -1 : 1;
         this.node.angle = 0;
     }
 
@@ -339,6 +344,14 @@ export default class Player extends cc.Component {
         Sfx.play("click", 0.7);
     }
 
+    // slam: instant drop toward the current gravity side (airborne only)
+    slam() {
+        if (!this.alive || this.grounded) return;
+        this.vy = this.gravityDir * MAX_FALL;
+        Fx.flipDust(this.node.parent, this.node.x, this.node.y, -this.gravityDir);
+        Sfx.play("flip", 0.45);
+    }
+
     applyPower(type: string) {
         if (type === "shield") {
             this.shield = true;
@@ -365,7 +378,11 @@ export default class Player extends cc.Component {
 
         const n = this.node;
         const speedFactor = this.dashT > 0 ? 1.55 : (this.brakeT > 0 ? 0.55 : 1);
-        n.x += this.level.speed * speedFactor * dt;
+        n.x += (this.level.speed * speedFactor + this.pushVx) * dt;
+        if (this.pushVx !== 0) {
+            this.pushVx *= Math.max(0, 1 - rawDt * 6);
+            if (Math.abs(this.pushVx) < 5) this.pushVx = 0;
+        }
         // dash afterimage trail
         if (this.dashT > 0) {
             this.ghostT -= rawDt;
@@ -581,5 +598,19 @@ export default class Player extends cc.Component {
 
     getGravityDir(): number {
         return this.gravityDir;
+    }
+
+    // ---------- player-vs-player elastic collision support ----------
+
+    getVelY(): number {
+        return this.vy;
+    }
+
+    setVelY(v: number) {
+        this.vy = v;
+    }
+
+    addPushX(v: number) {
+        this.pushVx += v;
     }
 }

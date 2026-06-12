@@ -9,7 +9,7 @@ import Fb from "./Fb";
 
 const { ccclass } = cc._decorator;
 
-type GameState = "loading" | "ready" | "run" | "dead" | "win" | "paused";
+type GameState = "loading" | "ready" | "run" | "dead" | "win" | "gameover" | "paused";
 
 // Owns the Game scene: loads assets + level JSON, builds the world through
 // LevelBuilder, spawns 1-2 Players, and runs the ready/run/dead/win state machine.
@@ -17,7 +17,7 @@ type GameState = "loading" | "ready" | "run" | "dead" | "win" | "paused";
 //
 // Co-op rules (GameData.players === 2): P1 = W key, P2 = UP/SPACE.
 // If one player dies while the partner survives, they revive next to the
-// partner after 3s. If everyone is dead, the level restarts.
+// partner after 3s. Each death costs team health; at 0 health, the run fails.
 @ccclass
 export default class GameMgr extends cc.Component {
 
@@ -34,6 +34,8 @@ export default class GameMgr extends cc.Component {
     private state: GameState = "loading";
     private time = 0;
     private deaths = 0;
+    private maxHealth = 3;
+    private health = 3;
     private crystalsTaken = 0;
     private slowT = 0;
     private enemyT = 0;
@@ -46,6 +48,20 @@ export default class GameMgr extends cc.Component {
     private chunks: { node: cc.Node; endX: number; m: FragmentManifest }[] = [];
     private distPx = 0;
     private distLabel: cc.Label = null;
+
+    // hit feel
+    private shakeT = 0;
+    private hitStopT = 0;
+    private resultPanel: cc.Node = null;
+    private bumpCd = 0;
+
+    // synced room start (server-clock timestamp; 0 = not a room race)
+    private roomT0 = 0;
+
+    // online ghosts (gvx/gvy = velocity estimate, col = remote opted in to collision)
+    private ghosts: { [uid: string]: { node: cc.Node; tx: number; ty: number; tsy: number; gvx: number; gvy: number; col: boolean; lastT: number; score: number; combo: number } } = {};
+    private liveAccum = 0;
+    private liveOn = false;
 
     private nameLabel: cc.Label = null;
     private crystalLabel: cc.Label = null;
@@ -68,13 +84,38 @@ export default class GameMgr extends cc.Component {
     private rhythmBad = 0;
     private rhythmMiss = 0;
 
+    // local rhythm battle AI.  It does not mutate player-note judgement;
+    // it runs a parallel score track over the same chart.
+    private rhythmAiLabel: cc.Label = null;
+    private rhythmAiNode: cc.Node = null;
+    private rhythmAiIndex = 0;
+    private rhythmAiScore = 0;
+    private rhythmAiCombo = 0;
+    private rhythmAiMaxCombo = 0;
+    private rhythmAiPerfect = 0;
+    private rhythmAiGood = 0;
+    private rhythmAiBad = 0;
+    private rhythmAiMiss = 0;
+    private rhythmAiRailDir = -1;
+    private rhythmAiLaneIndex = 0;
+
     isRunning(): boolean {
         return this.state === "run";
     }
 
+    private isRhythmAiBattle(): boolean {
+        return !!(this.level && this.level.rhythm && this.level.rhythm.enabled
+            && GameData.rhythmBattleMode === "ai");
+    }
+
+    private isRhythmOnlineBattle(): boolean {
+        return !!(this.level && this.level.rhythm && this.level.rhythm.enabled
+            && (GameData.rhythmBattleMode === "online" || !!GameData.roomCode));
+    }
+
     onLoad() {
         Sfx.preload();
-        Sfx.playBgm();
+        Sfx.playBgm("bgm_game");
         Fb.init();
         this.cameraNode = this.node.getChildByName("Main Camera");
 
@@ -92,6 +133,8 @@ export default class GameMgr extends cc.Component {
 
     onDestroy() {
         cc.systemEvent.off(cc.SystemEvent.EventType.KEY_DOWN, this.onKeyDown, this);
+        Fb.liveOff();
+        Fb.liveClear();
     }
 
     private onTexturesReady() {
@@ -147,10 +190,13 @@ export default class GameMgr extends cc.Component {
     private startLevel(data: any) {
         this.level = LevelBuilder.build(this.world, data, this.frames);
         this.spawnPlayersAndCamera(this.level.length - 480);
+        if (this.isRhythmAiBattle()) this.spawnRhythmAi();
         this.applyRotationForX(this.level.start.x, true);
         const titlePrefix = this.isRhythmLevel() ? "RHYTHM — "
             : (GameData.currentLevel === 0 ? "CUSTOM — " : "LEVEL " + GameData.currentLevel + " — ");
         this.nameLabel.string = titlePrefix + this.level.name
+            + (this.isRhythmAiBattle() ? "   [VS AI]" : "")
+            + (this.isRhythmOnlineBattle() ? "   [ONLINE]" : "")
             + (GameData.players === 2 && !this.isRhythmLevel() ? "   [2P]" : "");
         if (this.isRhythmLevel()) {
             Sfx.stopBgm();
@@ -159,6 +205,257 @@ export default class GameMgr extends cc.Component {
         this.refreshHud();
         this.state = "ready";
         this.setMsg(this.isRhythmLevel() ? "PRESS RHYTHM KEY TO START" : "PRESS SPACE TO RUN", this.controlsHint());
+        this.startLive();
+        this.armRoomStart();
+        // resume a mid-run save state, if one was loaded from the pause menu
+        if (GameData.pendingState) {
+            const ps = GameData.pendingState;
+            GameData.pendingState = null;
+            if (!this.endless && !this.isRhythmLevel()) this.applyState(ps);
+        }
+    }
+
+    // ---------- mid-run save states (6 slots, pause menu) ----------
+
+    private statePanel: cc.Node = null;
+
+    private stateSavable(): boolean {
+        return !this.endless && !this.isRhythmLevel() && this.players.length > 0;
+    }
+
+    private captureState(): any {
+        const p0 = this.players[0];
+        const takenC: number[] = [];
+        for (let i = 0; i < this.level.crystals.length; i++) {
+            if (this.level.crystals[i].taken) takenC.push(i);
+        }
+        const takenP: number[] = [];
+        for (let i = 0; i < this.level.powerups.length; i++) {
+            if (this.level.powerups[i].taken) takenP.push(i);
+        }
+        const st: any = {
+            lv: GameData.currentLevel,
+            path: GameData.currentLevelPath || null,
+            pl: GameData.players,
+            x: Math.round(p0.node.x),
+            y: Math.round(p0.node.y),
+            g: p0.getGravityDir(),
+            time: Math.round(this.time * 10) / 10,
+            deaths: this.deaths,
+            crystals: this.crystalsTaken,
+            takenC: takenC,
+            takenP: takenP,
+            label: (GameData.currentLevel === 0 ? "CUSTOM" : "L" + GameData.currentLevel)
+                + "  " + this.formatTime(this.time)
+                + "  x" + Math.round(p0.node.x)
+                + (GameData.players === 2 ? "  [2P]" : ""),
+            t: Date.now()
+        };
+        if (GameData.players === 2 && this.players[1]) {
+            const p1 = this.players[1];
+            st.p2 = { x: Math.round(p1.node.x), y: Math.round(p1.node.y), g: p1.getGravityDir() };
+        }
+        return st;
+    }
+
+    private applyState(ps: any) {
+        const norm = (v: any): any[] => !v ? [] : (Array.isArray(v) ? v : Object.keys(v).map((k) => v[k]));
+        const p0 = this.players[0];
+        p0.respawnAt(ps.x || 0, ps.y || 0, ps.g || -1);
+        if (ps.p2 && this.players[1]) {
+            this.players[1].respawnAt(ps.p2.x || 0, ps.p2.y || 0, ps.p2.g || -1);
+        }
+        this.time = ps.time || 0;
+        this.deaths = ps.deaths || 0;
+        this.crystalsTaken = ps.crystals || 0;
+        for (const i of norm(ps.takenC)) {
+            const c = this.level.crystals[i];
+            if (c) { c.taken = true; c.node.active = false; }
+        }
+        for (const i of norm(ps.takenP)) {
+            const pu = this.level.powerups[i];
+            if (pu) { pu.taken = true; pu.node.active = false; }
+        }
+        this.applyRotationForX(ps.x || 0, true);
+        const follow = this.cameraNode.getComponent(CameraFollow);
+        if (follow) follow.snap();
+        this.refreshHud();
+        this.setMsg("PRESS SPACE TO RESUME", this.controlsHint());
+    }
+
+    private closeStatePanel() {
+        if (this.statePanel) {
+            this.statePanel.destroy();
+            this.statePanel = null;
+        }
+    }
+
+    // confirmIdx: slot whose SAVE is in the two-click "SURE?" stage
+    private buildStatePanel(confirmIdx: number = -1) {
+        this.closeStatePanel();
+        const panel = new cc.Node("StatePanel");
+        this.hud.addChild(panel, 30);
+        this.statePanel = panel;
+
+        const mkSprite = (parent: cc.Node, w: number, h: number, x: number, y: number, color: cc.Color, opacity: number) => {
+            const n = new cc.Node("s");
+            const sp = n.addComponent(cc.Sprite);
+            sp.spriteFrame = this.frames["white"];
+            sp.sizeMode = cc.Sprite.SizeMode.CUSTOM;
+            n.setContentSize(w, h);
+            n.setPosition(x, y);
+            n.color = color;
+            n.opacity = opacity;
+            parent.addChild(n);
+            return n;
+        };
+
+        const box = mkSprite(panel, 640, 480, 0, 0, cc.color(10, 12, 26), 250);
+        box.on(cc.Node.EventType.TOUCH_START, (e: cc.Event) => e.stopPropagation());
+        const title = this.makeLabel(panel, 0, 210, 26, cc.color(255, 181, 74));
+        title.string = "SAVE / LOAD STATE";
+        const sub = this.makeLabel(panel, 0, 180, 13, cc.color(110, 120, 150));
+        sub.string = Fb.user() ? "stored in your account" : "stored on this device (log in to sync)";
+
+        const states = Fb.getStates();
+        for (let i = 0; i < Fb.MAX_STATES; i++) {
+            const st = states[i];
+            const y = 130 - i * 52;
+            const row = mkSprite(panel, 600, 44, 0, y, cc.color(22, 30, 60), 255);
+            let text = "#" + (i + 1) + "   ";
+            if (st) {
+                const d = new Date(st.t || 0);
+                const pad = (v: number) => (v < 10 ? "0" + v : "" + v);
+                text += st.label + "   " + (d.getMonth() + 1) + "/" + d.getDate() + " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
+            } else {
+                text += "EMPTY";
+            }
+            const lb = this.makeLabel(row, -288, 0, 15, st ? cc.color(235, 240, 255) : cc.color(110, 120, 150), 0);
+            lb.string = text;
+
+            const mkBtn2 = (txt: string, x: number, color: cc.Color, cb: () => void) => {
+                const b = mkSprite(row, 84, 32, x, 0, color, 255);
+                const blb = this.makeLabel(b, 0, 0, 13, cc.color(235, 240, 255));
+                blb.string = txt;
+                b.on(cc.Node.EventType.TOUCH_END, (e: cc.Event) => {
+                    e.stopPropagation();
+                    Sfx.play("click", 0.7);
+                    cb();
+                });
+            };
+            const idx = i;
+            if (st && confirmIdx !== idx) {
+                // occupied: first SAVE click asks for overwrite confirmation
+                mkBtn2("SAVE", 160, cc.color(70, 55, 15), () => this.buildStatePanel(idx));
+            } else if (st && confirmIdx === idx) {
+                mkBtn2("SURE?", 160, cc.color(140, 40, 40), () => {
+                    Fb.saveState(idx, this.captureState());
+                    this.buildStatePanel();
+                });
+            } else {
+                mkBtn2("SAVE", 160, cc.color(20, 70, 40), () => {
+                    Fb.saveState(idx, this.captureState());
+                    this.buildStatePanel();
+                });
+            }
+            if (st) {
+                mkBtn2("LOAD", 255, cc.color(24, 34, 76), () => {
+                    GameData.players = st.pl || 1;
+                    GameData.currentLevel = st.lv || 1;
+                    GameData.currentLevelPath = st.path || "";
+                    GameData.pendingState = st;
+                    Fx.fadeTo("Game", this.hud);
+                });
+            }
+        }
+
+        const closeB = mkSprite(panel, 160, 38, 0, -208, cc.color(50, 50, 60), 255);
+        const clb = this.makeLabel(closeB, 0, 0, 15, cc.color(235, 240, 255));
+        clb.string = "CLOSE";
+        closeB.on(cc.Node.EventType.TOUCH_END, (e: cc.Event) => {
+            e.stopPropagation();
+            Sfx.play("click", 0.7);
+            this.closeStatePanel();
+        });
+    }
+
+    // ---------- online ghosts ----------
+
+    private startLive() {
+        if (!Fb.enabled() || this.liveOn) return;
+        Fb.liveListen((entries) => this.onLiveEntries(entries));
+        this.liveOn = true;
+    }
+
+    // Ghosts only meet inside the same content: path-loaded (rhythm) levels
+    // key by their resource path, others by the level number.
+    private liveLevelKey(): any {
+        return GameData.currentLevelPath ? "p:" + GameData.currentLevelPath : GameData.currentLevel;
+    }
+
+    private onLiveEntries(entries: { uid: string; d: any }[]) {
+        if (!this.world || !this.world.isValid) return;
+        const now = Date.now();
+        const seen: { [uid: string]: boolean } = {};
+        for (const e of entries) {
+            if (e.uid === Fb.uid()) continue;
+            const d = e.d;
+            if (GameData.roomCode) {
+                // room race: only roommates are visible
+                if (d.room !== GameData.roomCode) continue;
+            } else {
+                if (d.room) continue;                         // private racers hidden
+                if (d.lv !== this.liveLevelKey()) continue;   // other mode/level
+            }
+            if (!d.t || now - d.t > 7000) continue;       // stale
+            seen[e.uid] = true;
+            let g = this.ghosts[e.uid];
+            if (!g) {
+                const n = new cc.Node("ghost");
+                const sp = n.addComponent(cc.Sprite);
+                sp.spriteFrame = this.frames["player"];
+                sp.sizeMode = cc.Sprite.SizeMode.CUSTOM;
+                n.setContentSize(36, 36);
+                n.opacity = 110;
+                n.color = cc.color(160, 170, 210);
+                n.zIndex = 4;
+                n.setPosition(d.x, d.y);
+                const ln = new cc.Node("name");
+                ln.setPosition(0, 34);
+                ln.color = cc.color(200, 210, 240);
+                const lb = ln.addComponent(cc.Label);
+                lb.string = d.n || "ghost";
+                lb.fontSize = 12;
+                lb.lineHeight = 14;
+                n.addChild(ln);
+                this.world.addChild(n);
+                g = this.ghosts[e.uid] = { node: n, tx: d.x, ty: d.y, tsy: 1, gvx: 0, gvy: 0, col: false, lastT: d.t || 0, score: d.score || 0, combo: d.combo || 0 };
+            }
+            // velocity estimate from consecutive network samples
+            const dtNet = ((d.t || 0) - g.lastT) / 1000;
+            if (dtNet > 0.03 && dtNet < 2) {
+                g.gvx = (d.x - g.tx) / dtNet;
+                g.gvy = (d.y - g.ty) / dtNet;
+            }
+            g.lastT = d.t || 0;
+            g.tx = d.x;
+            g.ty = d.y;
+            g.tsy = d.sy || 1;
+            g.col = !!d.col;
+            g.score = d.score || 0;
+            g.combo = d.combo || 0;
+            const nameNode = g.node.getChildByName("name");
+            if (nameNode) {
+                const lb = nameNode.getComponent(cc.Label);
+                if (lb) lb.string = (d.n || "ghost") + (this.isRhythmLevel() ? ("  " + (d.score || 0)) : "");
+            }
+        }
+        for (const uid in this.ghosts) {
+            if (!seen[uid]) {
+                this.ghosts[uid].node.destroy();
+                delete this.ghosts[uid];
+            }
+        }
     }
 
     private controlsHint(): string {
@@ -169,8 +466,8 @@ export default class GameMgr extends cc.Component {
             return "RED/BLUE NOTES = FLIP TIMING    HIT NOTES TO STEP LANES    MISS = NO DEATH    R = RESTART";
         }
         return GameData.players === 2
-            ? "P1: W flip, D dash, A brake      P2: UP flip, RIGHT dash, LEFT brake      R = RESTART"
-            : "SPACE/W/UP = FLIP    D = DASH    A = BRAKE    R = RESTART    ESC = PAUSE";
+            ? "P1: W flip / D dash / A brake / S slam      P2: ARROWS (UP flip, RIGHT dash, LEFT brake, DOWN slam)"
+            : "SPACE/W/UP = FLIP    D = DASH    A = BRAKE    S = SLAM    R = RESTART    ESC = PAUSE";
     }
 
     private spawnPlayersAndCamera(maxX: number) {
@@ -195,6 +492,11 @@ export default class GameMgr extends cc.Component {
 
         this.time = 0;
         this.deaths = 0;
+        this.maxHealth = this.endless ? 1 : 3;
+        this.health = GameData.carriedHealth > 0
+            ? Math.min(GameData.carriedHealth, this.maxHealth)
+            : this.maxHealth;
+        GameData.carriedHealth = 0;
         this.crystalsTaken = 0;
         this.timeScale = 1;
         this.enemyT = 0;
@@ -226,6 +528,17 @@ export default class GameMgr extends cc.Component {
         this.state = "ready";
         this.setMsg("PRESS SPACE TO RUN",
             this.controlsHint() + "    BEST " + GameData.getBestDist() + "m");
+        this.startLive();
+        this.armRoomStart();
+    }
+
+    // Room races start everyone on the host's server-clock timestamp.
+    private armRoomStart() {
+        if (GameData.roomT0 > 0) {
+            this.roomT0 = GameData.roomT0;
+            GameData.roomT0 = 0;
+            this.setMsg("GET READY", "ROOM " + GameData.roomCode + " — synced start");
+        }
     }
 
     private appendChunk(frag: any, endX: number) {
@@ -253,7 +566,7 @@ export default class GameMgr extends cc.Component {
     }
 
     private endlessGameOver() {
-        this.state = "win"; // reuses win input flow: SPACE = retry, ESC = menu
+        this.state = "gameover";
         this.unscheduleAllCallbacks();
         const meters = Math.floor(this.distPx / 10);
         const best = GameData.getBestDist();
@@ -262,12 +575,21 @@ export default class GameMgr extends cc.Component {
             GameData.setBestDist(meters);
             Fb.syncUp();
         }
-        this.setMsg(
-            newBest ? "NEW BEST!  " + meters + "m" : "RUN OVER  —  " + meters + "m",
-            "BEST " + Math.max(meters, best) + "m    CRYSTALS " + this.crystalsTaken
-            + "    TIME " + this.formatTime(this.time)
-            + "    SPACE = RETRY    ESC = MENU"
-        );
+        this.setMsg("", "");
+        this.scheduleOnce(() => {
+            this.buildResultPanel(
+                newBest ? "NEW BEST!" : "RUN OVER",
+                newBest ? cc.color(255, 181, 74) : cc.color(255, 90, 100),
+                [
+                    "DISTANCE   " + meters + "m",
+                    "BEST   " + Math.max(meters, best) + "m",
+                    "CRYSTALS " + this.crystalsTaken + "    TIME " + this.formatTime(this.time)
+                ],
+                [
+                    { text: "RESTART", cb: () => this.fullRestart() },
+                    { text: "MENU (ESC)", cb: () => Fx.fadeTo("Menu", this.hud) }
+                ]);
+        }, 0.5);
     }
 
     // ---------- HUD ----------
@@ -313,12 +635,13 @@ export default class GameMgr extends cc.Component {
         this.slowOverlay.opacity = 0;
         this.hud.addChild(this.slowOverlay, -1);
 
-        this.nameLabel = this.makeLabel(this.hud, -450, 296, 20, cyan, 0);
-        this.crystalLabel = this.makeLabel(this.hud, -450, 268, 20, white, 0);
-        this.deathLabel = this.makeLabel(this.hud, -450, 240, 20, pink, 0);
-        this.timeLabel = this.makeLabel(this.hud, 450, 296, 20, orange, 1);
-        this.distLabel = this.makeLabel(this.hud, 0, 296, 24, orange);
-        this.rhythmLabel = this.makeLabel(this.hud, 0, 266, 20, orange);
+        this.nameLabel = this.makeLabel(this.hud, -450, 284, 22, cyan, 0);
+        this.crystalLabel = this.makeLabel(this.hud, -80, 284, 22, white, 0);
+        this.deathLabel = this.makeLabel(this.hud, 205, 284, 22, pink, 0);
+        this.timeLabel = this.makeLabel(this.hud, 450, 284, 24, orange, 1);
+        this.distLabel = this.makeLabel(this.hud, 0, 284, 26, orange);
+        this.rhythmLabel = this.makeLabel(this.hud, 0, 256, 22, orange);
+        this.rhythmAiLabel = this.makeLabel(this.hud, 0, 230, 18, cyan);
         this.judgeLabel = this.makeLabel(this.hud, 0, 86, 34, white);
         this.msgLabel = this.makeLabel(this.hud, 0, 40, 44, white);
         this.subLabel = this.makeLabel(this.hud, 0, -10, 18, cyan);
@@ -333,7 +656,7 @@ export default class GameMgr extends cc.Component {
                 ? "CRYSTALS  " + this.crystalsTaken
                 : "CRYSTALS  " + this.crystalsTaken + " / " + this.level.totalCrystals;
         }
-        this.deathLabel.string = this.isRhythmLevel() ? "MISSES  " + this.rhythmMiss : "DEATHS  " + this.deaths;
+        this.deathLabel.string = "HEALTH  " + this.health + " / " + this.maxHealth;
         this.timeLabel.string = this.formatTime(this.time);
         this.updateRhythmHud();
     }
@@ -358,7 +681,8 @@ export default class GameMgr extends cc.Component {
         const p = this.players[idx];
         if (!p || !p.alive) return;
         if (kind === "dash") p.dash();
-        else p.brake();
+        else if (kind === "brake") p.brake();
+        else p.slam();
     }
 
     private rhythmKeyName(code: number): string {
@@ -419,6 +743,12 @@ export default class GameMgr extends cc.Component {
             case cc.macro.KEY.left:
                 this.skill(1, "brake");
                 break;
+            case cc.macro.KEY.s:
+                this.skill(0, "slam");
+                break;
+            case cc.macro.KEY.down:
+                this.skill(1, "slam");
+                break;
             case cc.macro.KEY.r:
                 this.fullRestart();
                 break;
@@ -426,7 +756,7 @@ export default class GameMgr extends cc.Component {
                 this.togglePause();
                 break;
             case cc.macro.KEY.q:
-                if (this.state === "paused" || this.state === "loading") {
+                if (this.state === "paused" || this.state === "loading" || this.state === "win" || this.state === "gameover") {
                     Fx.fadeTo("Menu", this.hud);
                 }
                 break;
@@ -436,6 +766,7 @@ export default class GameMgr extends cc.Component {
     private onRhythmButton(action: string) {
         switch (this.state) {
             case "ready":
+                if (this.roomT0 > 0) break;
                 this.startRhythmRun();
                 break;
             case "run":
@@ -446,6 +777,9 @@ export default class GameMgr extends cc.Component {
                 break;
             case "win":
                 this.proceedAfterWin();
+                break;
+            case "gameover":
+                this.fullRestart();
                 break;
         }
     }
@@ -462,6 +796,7 @@ export default class GameMgr extends cc.Component {
     private onAction(who: number) {
         switch (this.state) {
             case "ready":
+                if (this.roomT0 > 0) break; // room race: countdown starts the run
                 if (this.isRhythmLevel()) this.startRhythmRun();
                 else {
                     this.state = "run";
@@ -484,6 +819,9 @@ export default class GameMgr extends cc.Component {
             case "win":
                 this.proceedAfterWin();
                 break;
+            case "gameover":
+                this.fullRestart();
+                break;
         }
     }
 
@@ -497,7 +835,7 @@ export default class GameMgr extends cc.Component {
             if (this.isRhythmLevel()) Sfx.resumeMusic();
             this.closePauseMenu();
             this.setMsg("", "");
-        } else if (this.state === "win") {
+        } else if (this.state === "win" || this.state === "gameover") {
             Fx.fadeTo("Menu", this.hud);
         }
     }
@@ -539,9 +877,13 @@ export default class GameMgr extends cc.Component {
         mkBtn("RESUME  (SPACE)", 40, () => this.togglePause());
         mkBtn("RESTART  (R)", -30, () => this.fullRestart());
         mkBtn("MAIN MENU  (Q)", -100, () => Fx.fadeTo("Menu", this.hud));
+        if (this.stateSavable()) {
+            mkBtn("SAVE / LOAD STATE", -170, () => this.buildStatePanel());
+        }
     }
 
     private closePauseMenu() {
+        this.closeStatePanel();
         if (this.pausePanel) {
             this.pausePanel.destroy();
             this.pausePanel = null;
@@ -550,13 +892,21 @@ export default class GameMgr extends cc.Component {
 
     private fullRestart() {
         if (this.state === "loading" || this.players.length === 0) return;
+        GameData.carriedHealth = 0;
         if (this.endless) {
-            cc.director.loadScene("Game"); // streamed chunks: clean reload
+            Fx.fadeTo("Game", this.hud); // streamed chunks: clean reload
             return;
         }
         this.unscheduleAllCallbacks();
         this.closePauseMenu();
+        if (this.resultPanel) {
+            this.resultPanel.destroy();
+            this.resultPanel = null;
+        }
         if (this.isRhythmLevel()) Sfx.stopBgm();
+        this.deaths = 0;
+        this.maxHealth = this.endless ? 1 : 3;
+        this.health = this.maxHealth;
         this.respawnAll();
         this.state = "ready";
         this.setMsg(this.isRhythmLevel() ? "PRESS RHYTHM KEY TO START" : "PRESS SPACE TO RUN", this.controlsHint());
@@ -624,6 +974,7 @@ export default class GameMgr extends cc.Component {
         this.rhythmGood = 0;
         this.rhythmBad = 0;
         this.rhythmMiss = 0;
+        this.resetRhythmAi(resetNodes);
         if (resetNodes && this.level && this.level.rhythm) {
             for (const n of this.level.rhythm.notes) {
                 n.judged = false;
@@ -640,13 +991,15 @@ export default class GameMgr extends cc.Component {
         if (!this.rhythmLabel) return;
         if (!this.isRhythmLevel()) {
             this.rhythmLabel.string = "";
+            if (this.rhythmAiLabel) this.rhythmAiLabel.string = "";
             if (this.judgeLabel) this.judgeLabel.string = "";
             return;
         }
-        this.rhythmLabel.string = "SCORE " + this.rhythmScore
+        this.rhythmLabel.string = "YOU  SCORE " + this.rhythmScore
             + "   COMBO " + this.rhythmCombo
             + "   HIT " + (this.rhythmPerfect + this.rhythmGood + this.rhythmBad)
             + "   MISS " + this.rhythmMiss;
+        this.updateRhythmAiHud();
     }
 
     private rhythmSummary(): string {
@@ -658,6 +1011,23 @@ export default class GameMgr extends cc.Component {
             + "    ACC " + acc.toFixed(1) + "%"
             + "    MAX COMBO " + this.rhythmMaxCombo
             + "    P/G/B/M " + this.rhythmPerfect + "/" + this.rhythmGood + "/" + this.rhythmBad + "/" + this.rhythmMiss;
+    }
+
+
+    private rhythmBattleLines(): string[] {
+        if (this.isRhythmAiBattle()) {
+            const verdict = this.rhythmScore === this.rhythmAiScore ? "DRAW"
+                : (this.rhythmScore > this.rhythmAiScore ? "YOU WIN" : "AI WINS");
+            return [
+                "AI SCORE " + this.rhythmAiScore + "    MAX COMBO " + this.rhythmAiMaxCombo
+                    + "    P/G/B/M " + this.rhythmAiPerfect + "/" + this.rhythmAiGood + "/" + this.rhythmAiBad + "/" + this.rhythmAiMiss,
+                "BATTLE RESULT   " + verdict
+            ];
+        }
+        if (this.isRhythmOnlineBattle()) {
+            return ["ROOM " + (GameData.roomCode || "ONLINE") + "    remote scores are shown above ghosts"];
+        }
+        return [];
     }
 
     private showRhythmJudge(text: string, color: cc.Color) {
@@ -680,6 +1050,164 @@ export default class GameMgr extends cc.Component {
 
     private isJumpFlipRhythm(): boolean {
         return !!(this.level && this.level.rhythm && this.level.rhythm.enabled && this.level.rhythm.style === "jump-flip");
+    }
+
+    private rhythmNoteTime(n: any): number {
+        return Number(n && (n as any).hitTime !== undefined ? (n as any).hitTime : (n ? n.time : 0));
+    }
+
+    private spawnRhythmAi() {
+        if (this.rhythmAiNode && this.rhythmAiNode.isValid) return;
+        const n = new cc.Node("RhythmAI");
+        const sp = n.addComponent(cc.Sprite);
+        sp.spriteFrame = this.frames["player2"] || this.frames["player"];
+        sp.sizeMode = cc.Sprite.SizeMode.CUSTOM;
+        n.setContentSize(36, 36);
+        n.opacity = 205;
+        n.color = cc.color(255, 210, 130);
+        const name = new cc.Node("aiName");
+        name.setPosition(0, 34);
+        name.color = cc.color(255, 230, 150);
+        const lb = name.addComponent(cc.Label);
+        lb.string = "AI";
+        lb.fontSize = 12;
+        lb.lineHeight = 14;
+        n.addChild(name);
+        this.world.addChild(n, 4);
+        this.rhythmAiNode = n;
+        this.resetRhythmAi(true);
+    }
+
+    private resetRhythmAi(resetNode: boolean) {
+        this.rhythmAiIndex = 0;
+        this.rhythmAiScore = 0;
+        this.rhythmAiCombo = 0;
+        this.rhythmAiMaxCombo = 0;
+        this.rhythmAiPerfect = 0;
+        this.rhythmAiGood = 0;
+        this.rhythmAiBad = 0;
+        this.rhythmAiMiss = 0;
+        this.rhythmAiRailDir = -1;
+        this.rhythmAiLaneIndex = 0;
+        if (resetNode && this.isRhythmAiBattle()) {
+            this.spawnRhythmAi();
+            if (this.rhythmAiNode && this.level) {
+                const r = this.level.rhythm;
+                let y = this.level.start.y;
+                if (r && r.enabled && r.style === "jump-flip") y = (r.floorY || -240) + 18;
+                if (r && r.enabled && r.style === "gravity-collect") {
+                    const ys = r.laneYs && r.laneYs.length ? r.laneYs : [-212, -106, 0, 106, 212];
+                    y = ys[Math.max(0, Math.min(ys.length - 1, r.startLane || 0))];
+                }
+                this.rhythmAiNode.setPosition(this.level.start.x - 72, y);
+                this.rhythmAiNode.scaleX = 1;
+                this.rhythmAiNode.scaleY = 1;
+                this.rhythmAiNode.active = true;
+                this.rhythmAiNode.opacity = 205;
+            }
+        } else if (this.rhythmAiNode) {
+            this.rhythmAiNode.active = false;
+        }
+        this.updateRhythmAiHud();
+    }
+
+    private updateRhythmAiHud() {
+        if (!this.rhythmAiLabel) return;
+        if (this.isRhythmAiBattle()) {
+            const lead = this.rhythmScore - this.rhythmAiScore;
+            this.rhythmAiLabel.string = "AI   SCORE " + this.rhythmAiScore
+                + "   COMBO " + this.rhythmAiCombo
+                + "   DIFF " + (lead >= 0 ? "+" : "") + lead;
+        } else if (this.isRhythmOnlineBattle()) {
+            this.rhythmAiLabel.string = "ONLINE ROOM " + (GameData.roomCode || "") + "   scores shown on ghosts";
+        } else {
+            this.rhythmAiLabel.string = "";
+        }
+    }
+
+    private rhythmAiRand(i: number): number {
+        const x = Math.sin((i + 1) * 12.9898 + 78.233) * 43758.5453;
+        return x - Math.floor(x);
+    }
+
+    private rhythmAiJudge(i: number): string {
+        const r = this.rhythmAiRand(i);
+        // Strong, but intentionally beatable: roughly 58/27/10/5.
+        if (r < 0.58) return "perfect";
+        if (r < 0.85) return "good";
+        if (r < 0.95) return "bad";
+        return "miss";
+    }
+
+    private moveRhythmAiForNote(note: any) {
+        if (!this.rhythmAiNode || !this.rhythmAiNode.isValid || !this.level || !this.level.rhythm) return;
+        const r = this.level.rhythm;
+        if (r.style === "gravity-collect") {
+            const ys = r.laneYs && r.laneYs.length ? r.laneYs : [-212, -106, 0, 106, 212];
+            this.rhythmAiLaneIndex = Math.max(0, Math.min(ys.length - 1, note.trackLane || 0));
+            cc.tween(this.rhythmAiNode).to(0.07, { y: ys[this.rhythmAiLaneIndex] }, { easing: "sineOut" }).start();
+            return;
+        }
+        if (r.style === "jump-flip") {
+            if ((note.action || "") === "flip") this.rhythmAiRailDir *= -1;
+            const railY = this.rhythmAiRailDir > 0 ? ((r.ceilingY || 240) - 18) : ((r.floorY || -240) + 18);
+            this.rhythmAiNode.scaleY = this.rhythmAiRailDir > 0 ? -1 : 1;
+            if ((note.action || "") === "jump") {
+                const peak = railY - this.rhythmAiRailDir * (r.jumpHeight || 62);
+                this.rhythmAiNode.stopAllActions();
+                cc.tween(this.rhythmAiNode)
+                    .to(0.035, { y: peak }, { easing: "sineOut" })
+                    .to(0.065, { y: railY }, { easing: "sineIn" })
+                    .start();
+            } else {
+                this.rhythmAiNode.stopAllActions();
+                cc.tween(this.rhythmAiNode).to(0.08, { y: railY, angle: this.rhythmAiNode.angle + 120 }, { easing: "sineOut" }).start();
+            }
+        }
+    }
+
+    private applyRhythmAiJudgement(note: any, judgement: string, index: number) {
+        if (judgement === "perfect") {
+            this.rhythmAiPerfect++;
+            this.rhythmAiCombo++;
+            this.rhythmAiScore += 1000 + this.rhythmAiCombo * 2;
+        } else if (judgement === "good") {
+            this.rhythmAiGood++;
+            this.rhythmAiCombo++;
+            this.rhythmAiScore += 650 + this.rhythmAiCombo;
+        } else if (judgement === "bad") {
+            this.rhythmAiBad++;
+            this.rhythmAiCombo = 0;
+            this.rhythmAiScore += 250;
+        } else {
+            this.rhythmAiMiss++;
+            this.rhythmAiCombo = 0;
+        }
+        if (this.rhythmAiCombo > this.rhythmAiMaxCombo) this.rhythmAiMaxCombo = this.rhythmAiCombo;
+        if (judgement !== "miss") this.moveRhythmAiForNote(note);
+        this.updateRhythmAiHud();
+    }
+
+    private updateRhythmAi(dt: number) {
+        if (!this.isRhythmAiBattle() || !this.level || !this.level.rhythm) return;
+        if (!this.rhythmAiNode || !this.rhythmAiNode.isValid) this.spawnRhythmAi();
+        const r = this.level.rhythm;
+        const t = Sfx.getMusicTime();
+        const lead = this.players[0];
+        if (this.rhythmAiNode && lead && lead.node && lead.node.isValid) {
+            const targetX = lead.node.x - 78;
+            const k = Math.min(1, 8 * dt);
+            this.rhythmAiNode.x += (targetX - this.rhythmAiNode.x) * k;
+        }
+        while (this.rhythmAiIndex < r.notes.length) {
+            const idx = this.rhythmAiIndex;
+            const n = r.notes[idx];
+            const hitTime = this.rhythmNoteTime(n);
+            if (t < hitTime + 0.015) break;
+            const judgement = this.rhythmAiJudge(idx);
+            this.applyRhythmAiJudgement(n, judgement, idx);
+            this.rhythmAiIndex++;
+        }
     }
 
     private advanceRhythmIndex() {
@@ -940,6 +1468,83 @@ export default class GameMgr extends cc.Component {
         this.slowOverlay.opacity = 50;
     }
 
+    // ---------- result panel (win / game-over) ----------
+
+    private buildResultPanel(title: string, accent: cc.Color, lines: string[], buttons: { text: string; cb: () => void }[]) {
+        if (this.resultPanel) this.resultPanel.destroy();
+        const panel = new cc.Node("ResultPanel");
+        this.hud.addChild(panel, 20);
+        this.resultPanel = panel;
+
+        const mkSprite = (parent: cc.Node, w: number, h: number, x: number, y: number, color: cc.Color, opacity: number) => {
+            const n = new cc.Node("s");
+            const sp = n.addComponent(cc.Sprite);
+            sp.spriteFrame = this.frames["white"];
+            sp.sizeMode = cc.Sprite.SizeMode.CUSTOM;
+            n.setContentSize(w, h);
+            n.setPosition(x, y);
+            n.color = color;
+            n.opacity = opacity;
+            parent.addChild(n);
+            return n;
+        };
+
+        const dim = mkSprite(panel, 1700, 1100, 0, 0, cc.color(0, 0, 0), 130);
+        dim.on(cc.Node.EventType.TOUCH_START, (e: cc.Event) => e.stopPropagation());
+        const box = mkSprite(panel, 540, 340, 0, 0, cc.color(12, 14, 30), 245);
+        mkSprite(panel, 540, 7, 0, 167, accent, 255);
+        mkSprite(panel, 540, 3, 0, -170, accent, 160);
+
+        const titleLb = this.makeLabel(panel, 0, 118, 38, accent);
+        titleLb.string = title;
+        for (let i = 0; i < lines.length; i++) {
+            const lb = this.makeLabel(panel, 0, 52 - i * 36, 19, cc.color(235, 240, 255));
+            lb.string = lines[i];
+        }
+
+        const bw = 170;
+        const startX = -((buttons.length - 1) * (bw + 20)) / 2;
+        for (let i = 0; i < buttons.length; i++) {
+            const b = mkSprite(panel, bw, 48, startX + i * (bw + 20), -118, cc.color(24, 34, 76), 255);
+            const lb = this.makeLabel(b, 0, 0, 18, cc.color(235, 240, 255));
+            lb.string = buttons[i].text;
+            const cb = buttons[i].cb;
+            b.on(cc.Node.EventType.TOUCH_END, (e: cc.Event) => {
+                e.stopPropagation();
+                Sfx.play("click", 0.8);
+                cb();
+            });
+        }
+
+        // pop-in animation
+        panel.scale = 0.7;
+        panel.opacity = 0;
+        cc.tween(panel)
+            .to(0.25, { scale: 1, opacity: 255 }, { easing: "backOut" })
+            .start();
+    }
+
+    private buildGameOverPanel(lines: string[]) {
+        this.state = "gameover";
+        this.unscheduleAllCallbacks();
+        if (this.isRhythmLevel()) Sfx.stopBgm();
+        this.timeScale = 1;
+        this.slowT = 0;
+        if (this.slowOverlay) this.slowOverlay.opacity = 0;
+        this.msgLabel.node.color = cc.color(235, 240, 255);
+        this.setMsg("", "");
+        this.scheduleOnce(() => {
+            this.buildResultPanel(
+                "GAME OVER",
+                cc.color(255, 90, 100),
+                lines,
+                [
+                    { text: "RESTART", cb: () => this.fullRestart() },
+                    { text: "MENU", cb: () => Fx.fadeTo("Menu", this.hud) }
+                ]);
+        }, 0.45);
+    }
+
     // ---------- callbacks from Player ----------
 
     private isInRollBonusWindow(): boolean {
@@ -968,8 +1573,29 @@ export default class GameMgr extends cc.Component {
     onDeath(dead: Player) {
         if (this.state !== "run") return;
         this.deaths++;
+        this.health = Math.max(0, this.health - 1);
         Sfx.play("death", 0.8);
+        // hit feel: brief hit-stop + camera shake
+        this.hitStopT = 0.09;
+        this.timeScale = 0.05;
+        this.shakeT = 0.35;
         this.refreshHud();
+
+        if (this.health <= 0) {
+            if (this.endless) {
+                this.endlessGameOver();
+                return;
+            }
+            const lines = this.isRhythmLevel()
+                ? [this.rhythmSummary()].concat(this.rhythmBattleLines()).concat(["TIME   " + this.formatTime(this.time), "HEALTH   0 / " + this.maxHealth])
+                : [
+                    "CRYSTALS   " + this.crystalsTaken + " / " + this.level.totalCrystals,
+                    "TIME   " + this.formatTime(this.time),
+                    "HEALTH   0 / " + this.maxHealth
+                ];
+            this.buildGameOverPanel(lines);
+            return;
+        }
 
         const survivor = this.anyAlive();
         if (survivor) {
@@ -980,18 +1606,29 @@ export default class GameMgr extends cc.Component {
                 const s = this.anyAlive();
                 if (this.state === "run" && s) {
                     dead.respawnAt(s.node.x - 50, s.node.y, s.getGravityDir());
+                    this.refreshHud();
                 }
             }, 3);
             return;
         }
 
         // everyone is down
+        if (this.endless) {
+            this.state = "dead";
+            this.unscheduleAllCallbacks();
+            this.setMsg("CRASHED", "HEALTH " + this.health + " / " + this.maxHealth);
+            this.scheduleOnce(() => {
+                GameData.carriedHealth = this.health;
+                Fx.fadeTo("Game", this.hud);
+            }, 0.8);
+            return;
+        }
         if (this.isRhythmLevel()) {
             this.state = "dead";
             this.unscheduleAllCallbacks();
             Sfx.stopBgm();
             this.msgLabel.node.color = cc.color(255, 90, 100);
-            this.setMsg("FAILED", this.rhythmSummary());
+            this.setMsg("LIFE LOST", "HEALTH " + this.health + " / " + this.maxHealth);
             this.scheduleOnce(() => {
                 this.msgLabel.node.color = cc.color(235, 240, 255);
                 this.respawnAll();
@@ -1000,15 +1637,11 @@ export default class GameMgr extends cc.Component {
             }, 1.0);
             return;
         }
-        if (this.endless) {
-            this.endlessGameOver();
-            return;
-        }
         // brief fail screen, then auto-retry to keep the rhythm going
         this.state = "dead";
         this.unscheduleAllCallbacks();
         this.msgLabel.node.color = cc.color(255, 90, 100);
-        this.setMsg("FAILED", "");
+        this.setMsg("LIFE LOST", "HEALTH " + this.health + " / " + this.maxHealth);
         this.scheduleOnce(() => {
             this.msgLabel.node.color = cc.color(235, 240, 255);
             this.setMsg("", "");
@@ -1046,14 +1679,30 @@ export default class GameMgr extends cc.Component {
             Fb.syncUp();
         }
         const last = pathLevel || rhythm || (!custom && GameData.currentLevel >= GameData.MAX_LEVEL);
-        this.setMsg(
-            last ? "YOU ESCAPED ASTRA-9!" : "LEVEL CLEAR!",
-            (this.isRhythmLevel() ? this.rhythmSummary() : "CRYSTALS " + this.crystalsTaken + "/" + this.level.totalCrystals)
-            + "    TIME " + this.formatTime(this.time)
-            + (this.isRhythmLevel() ? "" : "    DEATHS " + this.deaths)
-            + (custom ? "    SPACE = EDITOR    ESC = MENU"
-                : last ? "    SPACE = MENU" : "    SPACE = NEXT    ESC = MENU")
-        );
+        this.setMsg("", "");
+        const lines = rhythm
+            ? [this.rhythmSummary()].concat(this.rhythmBattleLines()).concat(["TIME   " + this.formatTime(this.time)])
+            : [
+                "CRYSTALS   " + this.crystalsTaken + " / " + this.level.totalCrystals,
+                "TIME   " + this.formatTime(this.time),
+                "HEALTH   " + this.health + " / " + this.maxHealth
+            ];
+        const buttons = custom
+            ? [{ text: "EDITOR (SPACE)", cb: () => this.proceedAfterWin() },
+               { text: "MENU (ESC)", cb: () => Fx.fadeTo("Menu", this.hud) }]
+            : last
+            ? (pathLevel || rhythm
+                ? [{ text: "MENU", cb: () => this.proceedAfterWin() }]
+                : [{ text: "ENDLESS", cb: () => this.proceedAfterWin() },
+                   { text: "MENU", cb: () => Fx.fadeTo("Menu", this.hud) }])
+            : [{ text: "NEXT (SPACE)", cb: () => this.proceedAfterWin() },
+               { text: "MENU (ESC)", cb: () => Fx.fadeTo("Menu", this.hud) }];
+        // let the suck-into-portal animation play before the panel pops
+        this.scheduleOnce(() => {
+            this.buildResultPanel(
+                rhythm ? "SONG CLEAR!" : last ? "YOU ESCAPED ASTRA-9!" : "LEVEL CLEAR!",
+                cc.color(255, 181, 74), lines, buttons);
+        }, 0.65);
     }
 
     private proceedAfterWin() {
@@ -1067,7 +1716,9 @@ export default class GameMgr extends cc.Component {
             GameData.currentLevel++;
             Fx.fadeTo("Game", this.hud);
         } else {
-            Fx.fadeTo("Menu", this.hud);
+            GameData.currentLevelPath = "";
+            GameData.currentLevel = -1;
+            Fx.fadeTo("Game", this.hud);
         }
     }
 
@@ -1078,6 +1729,66 @@ export default class GameMgr extends cc.Component {
         if (this.hud && this.cameraNode) {
             this.hud.x = this.cameraNode.x;
             this.hud.y = this.cameraNode.y;
+        }
+        // hit feel timers (run on real time, even outside the run state)
+        if (this.hitStopT > 0) {
+            this.hitStopT -= dt;
+            if (this.hitStopT <= 0) this.timeScale = this.slowT > 0 ? 0.55 : 1;
+        }
+        if (this.shakeT > 0) {
+            this.shakeT -= dt;
+            this.cameraNode.y = this.shakeT <= 0 ? 0
+                : (Math.random() * 2 - 1) * 16 * (this.shakeT / 0.35);
+        }
+        // room race countdown (server clock)
+        if (this.state === "ready" && this.roomT0 > 0) {
+            const remain = (this.roomT0 - Fb.serverNow()) / 1000;
+            if (remain <= 0) {
+                this.roomT0 = 0;
+                if (this.isRhythmLevel()) {
+                    this.startRhythmRun();
+                } else {
+                    this.state = "run";
+                    this.setMsg("", "");
+                    Sfx.play("power", 0.9);
+                }
+            } else {
+                this.msgLabel.string = remain <= 3 ? remain.toFixed(1) : "GET READY";
+            }
+        }
+        // online ghosts: smooth remote players and broadcast our position
+        if (this.liveOn) {
+            for (const uid in this.ghosts) {
+                const g = this.ghosts[uid];
+                const k = Math.min(1, 10 * dt);
+                g.node.x += (g.tx - g.node.x) * k;
+                g.node.y += (g.ty - g.node.y) * k;
+                g.node.scaleY = g.tsy;
+                const nameN = g.node.getChildByName("name");
+                if (nameN) nameN.scaleY = g.tsy; // keep the name upright
+            }
+            if (this.state === "run" && Fb.user()) {
+                this.liveAccum += dt;
+                if (this.liveAccum >= 0.12) {
+                    this.liveAccum = 0;
+                    const me = this.anyAlive();
+                    if (me) {
+                        Fb.liveSet({
+                            x: Math.round(me.node.x),
+                            y: Math.round(me.node.y),
+                            sy: me.node.scaleY < 0 ? -1 : 1,
+                            col: GameData.settings.onlineCollide ? 1 : 0,
+                            room: GameData.roomCode || null,
+                            lv: this.liveLevelKey(),
+                            n: Fb.userName(),
+                            score: this.isRhythmLevel() ? this.rhythmScore : 0,
+                            combo: this.isRhythmLevel() ? this.rhythmCombo : 0,
+                            mode: this.isRhythmLevel() ? "rhythm" : "runner",
+                            t: Date.now()
+                        });
+                    }
+                }
+            }
         }
         // animate field rotation at a constant rate, and re-anchor every frame
         // because the pivot (camera focus) keeps moving
@@ -1092,7 +1803,10 @@ export default class GameMgr extends cc.Component {
 
         this.time += dt;
         this.timeLabel.string = this.formatTime(this.time);
-        if (this.isRhythmLevel()) this.updateRhythm();
+        if (this.isRhythmLevel()) {
+            this.updateRhythm();
+            this.updateRhythmAi(dt);
+        }
 
         // endless: ramp speed, track distance, stream chunks ahead / drop behind
         if (this.endless) {
@@ -1142,5 +1856,84 @@ export default class GameMgr extends cc.Component {
         // rotation zones track the leading living player
         const lead = this.anyAlive();
         if (lead) this.applyRotationForX(lead.node.x, false);
+
+        // 2P: players collide elastically with each other
+        if (this.bumpCd > 0) this.bumpCd -= dt;
+        if (GameData.players === 2 && this.players.length === 2) {
+            this.playersCollide();
+        }
+        // online: collide with remote players who also opted in
+        if (GameData.settings.onlineCollide) {
+            this.ghostsCollide();
+        }
+    }
+
+    // Local-side elastic response against remote players' interpolated
+    // bodies. Both clients run the same symmetric logic, so the pair
+    // separates consistently; only the local player is ever moved here.
+    private ghostsCollide() {
+        for (const uid in this.ghosts) {
+            const g = this.ghosts[uid];
+            if (!g.col || !g.node.isValid) continue;
+            for (const p of this.players) {
+                if (!p.alive) continue;
+                const n = p.node;
+                const px = 34 - Math.abs(n.x - g.node.x);
+                if (px <= 0) continue;
+                const py = 36 - Math.abs(n.y - g.node.y);
+                if (py <= 0) continue;
+                if (py <= px) {
+                    const dir = n.y >= g.node.y ? 1 : -1;
+                    n.y += dir * py;
+                    p.setVelY((g.gvy || 0) * 0.9 + dir * 60);
+                } else {
+                    const dirx = n.x >= g.node.x ? 1 : -1;
+                    n.x += dirx * px;
+                    p.addPushX(dirx * 160);
+                }
+                if (this.bumpCd <= 0) {
+                    this.bumpCd = 0.15;
+                    Sfx.play("click", 0.5);
+                    Fx.crystal(this.world, (n.x + g.node.x) / 2, (n.y + g.node.y) / 2, cc.color(200, 220, 255));
+                }
+            }
+        }
+    }
+
+    // Equal-mass arcade elastic collision between the two runners:
+    // separate along the shallow axis, swap vertical velocities (x0.9
+    // restitution) or trade a decaying horizontal shove.
+    private playersCollide() {
+        const a = this.players[0];
+        const b = this.players[1];
+        if (!a.alive || !b.alive) return;
+        const an = a.node;
+        const bn = b.node;
+        const W = 32, H = 36;
+        const px = W - Math.abs(an.x - bn.x);
+        if (px <= 0) return;
+        const py = H - Math.abs(an.y - bn.y);
+        if (py <= 0) return;
+
+        if (py <= px) {
+            const dir = an.y >= bn.y ? 1 : -1;
+            an.y += dir * py / 2;
+            bn.y -= dir * py / 2;
+            const va = a.getVelY();
+            const vb = b.getVelY();
+            a.setVelY(vb * 0.9);
+            b.setVelY(va * 0.9);
+        } else {
+            const dirx = an.x >= bn.x ? 1 : -1;
+            an.x += dirx * px / 2;
+            bn.x -= dirx * px / 2;
+            a.addPushX(dirx * 160);
+            b.addPushX(-dirx * 160);
+        }
+        if (this.bumpCd <= 0) {
+            this.bumpCd = 0.15;
+            Sfx.play("click", 0.5);
+            Fx.crystal(this.world, (an.x + bn.x) / 2, (an.y + bn.y) / 2, cc.color(200, 220, 255));
+        }
     }
 }

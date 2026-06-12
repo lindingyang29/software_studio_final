@@ -14,6 +14,10 @@ export default class Fx {
         Fx.frame = f;
     }
 
+    static isFading(): boolean {
+        return Fx.fading;
+    }
+
     private static ps(parent: cc.Node, x: number, y: number): cc.ParticleSystem {
         const n = new cc.Node("fx");
         n.setPosition(x, y);
@@ -276,6 +280,7 @@ export default class Fx {
     // `parent` must be a node glued to the camera (hud / menu canvas / editor ui).
     static fadeTo(scene: string, parent: cc.Node) {
         if (Fx.fading) return;
+        (window as any).__gfrSceneHint = scene;
         if (!Fx.frame || !parent || !parent.isValid) {
             cc.director.loadScene(scene);
             return;
@@ -290,9 +295,25 @@ export default class Fx {
         n.opacity = 0;
         n.zIndex = 999;
         parent.addChild(n);
+        const line = new cc.Node("fadeLine");
+        const lineSp = line.addComponent(cc.Sprite);
+        lineSp.spriteFrame = Fx.frame;
+        lineSp.sizeMode = cc.Sprite.SizeMode.CUSTOM;
+        line.setContentSize(1700, 4);
+        line.color = cc.color(127, 247, 255);
+        line.opacity = 0;
+        line.setPosition(0, 220);
+        line.zIndex = 1000;
+        parent.addChild(line);
         cc.tween(n)
-            .to(0.25, { opacity: 255 })
+            .to(0.36, { opacity: 255 })
             .call(() => cc.director.loadScene(scene))
+            .start();
+        cc.tween(line)
+            .parallel(
+                cc.tween().to(0.36, { y: -220 }),
+                cc.tween().to(0.14, { opacity: 230 }).delay(0.1).to(0.12, { opacity: 0 })
+            )
             .start();
     }
 
@@ -309,7 +330,7 @@ export default class Fx {
         n.zIndex = 999;
         parent.addChild(n);
         cc.tween(n)
-            .to(0.3, { opacity: 0 })
+            .to(0.42, { opacity: 0 })
             .call(() => n.destroy())
             .start();
     }

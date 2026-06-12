@@ -10,6 +10,7 @@ export interface Settings {
     rhythmJumpKeys: string; // comma-separated key names, e.g. f,j
     rhythmFlipKeys: string; // comma-separated key names, e.g. d,k
     rhythmSpeedScale: number; // rhythm scroll / flow multiplier, 0.1..2.0
+    onlineCollide: number;    // 0 = pass-through ghosts, 1 = elastic collision
 }
 
 export default class GameData {
@@ -23,6 +24,21 @@ export default class GameData {
     // the classic numbered path "levels/level" + currentLevel.
     static currentLevelPath = "";
 
+    // A mid-run save state waiting to be applied by GameMgr after the level
+    // is built (set by the pause-menu LOAD STATE flow).
+    static pendingState: any = null;
+
+    // Online room race: code shown to/entered by players, and the host-set
+    // synchronized start time (server clock). Cleared when back in the menu.
+    static roomCode: string = "";
+    static roomT0 = 0;
+
+    // Rhythm play style chosen from the song menu.
+    // solo  = normal one-player rhythm
+    // ai    = local score battle against an automated opponent
+    // online= Firebase room race; remote players appear as score ghosts
+    static rhythmBattleMode: string = "solo";
+
     static readonly CUSTOM_KEY = "gfr_custom_level";
 
     static hasCustomLevel(): boolean {
@@ -31,6 +47,10 @@ export default class GameData {
 
     // Endless mode best distance, in meters. currentLevel === -1 -> endless.
     private static readonly BEST_KEY = "gfr_best_dist";
+
+    // Transient value used only while reloading the Game scene after an
+    // endless-mode life loss. 0 means "start a fresh run with full health".
+    static carriedHealth = 0;
 
     static getBestDist(): number {
         const v = parseInt(cc.sys.localStorage.getItem(GameData.BEST_KEY) || "0", 10);
@@ -63,8 +83,14 @@ export default class GameData {
         }
     }
 
+    // Raw overwrite — used when switching save slots.
+    static setUnlocked(v: number) {
+        const c = Math.max(1, Math.min(Math.floor(v) || 1, GameData.MAX_LEVEL));
+        cc.sys.localStorage.setItem(GameData.KEY, String(c));
+    }
+
     private static loadSettings(): Settings {
-        const def: Settings = { sfx: 1, bgm: 0.6, speed: 1, scheme: 0, brightness: 1, rhythmGap: 280, rhythmJumpKeys: "f,j", rhythmFlipKeys: "d,k", rhythmSpeedScale: 1 };
+        const def: Settings = { sfx: 1, bgm: 0.6, speed: 1, scheme: 0, brightness: 1, rhythmGap: 280, rhythmJumpKeys: "f,j", rhythmFlipKeys: "d,k", rhythmSpeedScale: 1, onlineCollide: 0 };
         try {
             const raw = cc.sys.localStorage.getItem(GameData.SETTINGS_KEY);
             if (raw) {

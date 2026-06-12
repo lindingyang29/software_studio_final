@@ -12,7 +12,27 @@
       "PowerShell(foreach \\($email in @\\(\"bignosewhy@gapp.nthu.edu.tw\",\"qoo930921@gmail.com\",\"chima.miro@gmail.com\"\\)\\) { try { $r = Invoke-RestMethod -Uri \\(\"https://api.github.com/search/users?q=\" + [uri]::EscapeDataString\\(\"$email in:email\"\\)\\) -Headers @{ Accept = \"application/vnd.github+json\"; \"User-Agent\" = \"claude-code\" }; if \\($r.total_count -ge 1\\) { Write-Output \"$email -> $\\($r.items[0].login\\)\" } else { Write-Output \"$email -> NOT FOUND\" } } catch { Write-Output \"$email -> ERROR $\\($_.Exception.Message\\)\" }; Start-Sleep -Seconds 2 })",
       "WebFetch(domain:lava-summer-130.notion.site)",
       "PowerShell(node \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\tools\\\\fetch-notion.js\")",
-      "PowerShell(node \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\tools\\\\fetch-notion2.js\")"
+      "PowerShell(node \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\tools\\\\fetch-notion2.js\")",
+      "PowerShell($paths = @\\(\"C:\\\\CocosDashboard\",\"C:\\\\Program Files\\\\CocosDashboard\",\"C:\\\\ProgramData\\\\cocos\",\"$env:LOCALAPPDATA\\\\Programs\",\"C:\\\\CocosCreator\",\"D:\\\\CocosDashboard\"\\); foreach \\($p in $paths\\) { if \\(Test-Path $p\\) { Get-ChildItem $p -Recurse -Filter \"CocosCreator.exe\" -ErrorAction SilentlyContinue -Depth 3 | Select-Object -First 5 FullName } }; Get-ChildItem \"C:\\\\\" -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match \"cocos\" -or $_.Name -match \"Creator\" } | Select-Object FullName)",
+      "PowerShell(Out-Null *)",
+      "PowerShell(Set-Content *)",
+      "PowerShell(node \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\tools\\\\fetch-notion3.js\" app.notion.com e29c45482acd820f8520815555905efc)",
+      "Bash(curl -s \"https://identitytoolkit.googleapis.com/v1/projects?key=AIzaSyBJaEAZfwuTOxUlwaV71SFAU2LtBwLzU0A\")",
+      "PowerShell(firebase login:list *)",
+      "Bash(curl -s -o /dev/null -w \"web.app: HTTP %{http_code}\\\\n\" https://gravity-runner-2e4da.web.app/)",
+      "Bash(curl -s https://gravity-runner-2e4da.web.app/)",
+      "PowerShell(node \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\tools\\\\gen-bgm.js\")",
+      "PowerShell($f = \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\GravityRunner\\\\assets\\\\scripts\\\\MenuCtrl.ts\"; \\(Get-Content $f | Select-String -Pattern \"<<<<<<<|=======|>>>>>>>\" | ForEach-Object { \"$\\($_.LineNumber\\): $\\($_.Line\\)\" }\\))",
+      "PowerShell($f = \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\GravityRunner\\\\assets\\\\scripts\\\\GameMgr.ts\"; \\(Get-Content $f | Select-String -Pattern \"<<<<<<<|^=======|>>>>>>>\" | ForEach-Object { \"$\\($_.LineNumber\\): $\\($_.Line\\)\" }\\))",
+      "PowerShell(git add *)",
+      "PowerShell(Set-Location \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\"; Select-String -Path GravityRunner\\\\assets\\\\scripts\\\\GameMgr.ts -Pattern \"onKeyDown|rhythmJump|rhythmFlip|jumpKeys|flipKeys|keyToName|isRhythmLevel\\\\\\(\\\\\\)\" | ForEach-Object { \"$\\($_.LineNumber\\): $\\($_.Line.Trim\\(\\)\\)\" } | Select-Object -First 30)",
+      "PowerShell(git checkout *)",
+      "PowerShell(Select-String -Path \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\GravityRunner\\\\assets\\\\scripts\\\\GameData.ts\" -Pattern \"export interface Settings\" -Context 0,14 | ForEach-Object { $_.Context.PostContext })",
+      "PowerShell(Select-String -Path \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\GravityRunner\\\\assets\\\\scripts\\\\GameData.ts\" -Pattern \"const def: Settings\" | ForEach-Object { $_.Line.Trim\\(\\) })",
+      "PowerShell(Select-String -Path \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\GravityRunner\\\\assets\\\\scripts\\\\MenuCtrl.ts\" -Pattern \"cc.EditBox created via addComponent has NO internal|mkLabel\" | ForEach-Object { \"$\\($_.LineNumber\\): $\\($_.Line.Trim\\(\\)\\)\" })",
+      "PowerShell(Select-String -Path \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\GravityRunner\\\\assets\\\\scripts\\\\MenuCtrl.ts\" -Pattern \"private editBox\" -Context 0,18 | ForEach-Object { $_.Line; $_.Context.PostContext })",
+      "PowerShell(Set-Location \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\"; Write-Output \"=== builder.json check ===\"; Select-String -Path GravityRunner\\\\settings\\\\builder.json -Pattern \"startScene|title\" | ForEach-Object { $_.Line.Trim\\(\\) }; Write-Output \"=== other silent reverts? diff base..HEAD for suspect files ===\"; git diff 1ffbe9c HEAD --stat -- tools/ collab/BOARD.md | Select-Object -Last 6)",
+      "PowerShell(Select-String -Path \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\GravityRunner\\\\assets\\\\scripts\\\\GameMgr.ts\" -Pattern \"private onAction\" -Context 0,14 | ForEach-Object { $_.Line; $_.Context.PostContext })"
     ]
   }
 }

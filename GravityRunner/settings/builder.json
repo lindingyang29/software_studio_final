@@ -1,55 +1,61 @@
-{
-  "title": "NewProject",
-  "packageName": "org.cocos2d.demo",
-  "startScene": "7706e1eb-32b8-4647-bd7e-facfc7f1b041",
-  "excludeScenes": [],
-  "orientation": {
-    "landscapeRight": true,
-    "landscapeLeft": true,
-    "portrait": false,
-    "upsideDown": false
-  },
-  "webOrientation": "auto",
-  "inlineSpriteFrames": true,
-  "inlineSpriteFrames_native": true,
-  "mainCompressionType": "default",
-  "mainIsRemote": false,
-  "optimizeHotUpdate": false,
-  "md5Cache": true,
-  "nativeMd5Cache": true,
-  "encryptJs": true,
-  "xxteaKey": "d156f829-4ade-4a",
-  "zipCompressJs": true,
-  "fb-instant-games": {},
-  "android": {
-    "packageName": "org.cocos2d.demo",
-    "REMOTE_SERVER_ROOT": ""
-  },
-  "ios": {
-    "packageName": "org.cocos2d.demo",
-    "REMOTE_SERVER_ROOT": "",
-    "ios_enable_jit": true
-  },
-  "mac": {
-    "packageName": "org.cocos2d.demo",
-    "REMOTE_SERVER_ROOT": "",
-    "width": 1280,
-    "height": 720
-  },
-  "win32": {
-    "REMOTE_SERVER_ROOT": "",
-    "width": 1280,
-    "height": 720
-  },
-  "android-instant": {
-    "packageName": "org.cocos2d.demo",
-    "REMOTE_SERVER_ROOT": "",
-    "pathPattern": "",
-    "scheme": "https",
-    "host": "",
-    "skipRecord": false,
-    "recordPath": ""
-  },
-  "appBundle": false,
-  "agreements": {}
+﻿{
+    "title":  "Gravity Flip Runner",
+    "packageName":  "org.cocos2d.demo",
+    "startScene":  "5a9a0499-a12e-4f3d-ad54-ff8fe9abfbd5",
+    "excludeScenes":  [
+
+                      ],
+    "orientation":  {
+                        "landscapeRight":  true,
+                        "landscapeLeft":  true,
+                        "portrait":  false,
+                        "upsideDown":  false
+                    },
+    "webOrientation":  "auto",
+    "inlineSpriteFrames":  true,
+    "inlineSpriteFrames_native":  true,
+    "mainCompressionType":  "default",
+    "mainIsRemote":  false,
+    "optimizeHotUpdate":  false,
+    "md5Cache":  true,
+    "nativeMd5Cache":  true,
+    "encryptJs":  true,
+    "xxteaKey":  "d156f829-4ade-4a",
+    "zipCompressJs":  true,
+    "fb-instant-games":  {
+
+                         },
+    "android":  {
+                    "packageName":  "org.cocos2d.demo",
+                    "REMOTE_SERVER_ROOT":  ""
+                },
+    "ios":  {
+                "packageName":  "org.cocos2d.demo",
+                "REMOTE_SERVER_ROOT":  "",
+                "ios_enable_jit":  true
+            },
+    "mac":  {
+                "packageName":  "org.cocos2d.demo",
+                "REMOTE_SERVER_ROOT":  "",
+                "width":  1280,
+                "height":  720
+            },
+    "win32":  {
+                  "REMOTE_SERVER_ROOT":  "",
+                  "width":  1280,
+                  "height":  720
+              },
+    "android-instant":  {
+                            "packageName":  "org.cocos2d.demo",
+                            "REMOTE_SERVER_ROOT":  "",
+                            "pathPattern":  "",
+                            "scheme":  "https",
+                            "host":  "",
+                            "skipRecord":  false,
+                            "recordPath":  ""
+                        },
+    "appBundle":  false,
+    "agreements":  {
+
+                   }
 }

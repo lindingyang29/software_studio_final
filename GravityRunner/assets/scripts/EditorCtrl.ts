@@ -37,6 +37,7 @@ export default class EditorCtrl extends cc.Component {
 
     onLoad() {
         Sfx.preload();
+        Sfx.playBgm("bgm_menu");
         this.cameraNode = this.node.getChildByName("Main Camera");
         cc.resources.loadDir("textures", cc.SpriteFrame, (err, assets: cc.SpriteFrame[]) => {
             if (err) {
