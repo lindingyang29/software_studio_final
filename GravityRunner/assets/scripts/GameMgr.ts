@@ -1019,11 +1019,13 @@ export default class GameMgr extends cc.Component {
         if (this.rhythmEffectLabel) this.rhythmEffectLabel.node.setPosition(0, split ? -232 : 216);
         if (this.rhythmOpponentEffectLabel) this.rhythmOpponentEffectLabel.node.setPosition(0, split ? 228 : 198);
         if (this.judgeLabel) this.judgeLabel.node.y = split ? -86 : 86;
-        if (this.nameLabel) this.nameLabel.node.setPosition(-620, 286);
-        if (this.crystalLabel) this.crystalLabel.node.setPosition(-40, 286);
-        if (this.deathLabel) this.deathLabel.node.setPosition(330, 286);
-        if (this.timeLabel) this.timeLabel.node.setPosition(620, 286);
-        if (this.distLabel) this.distLabel.node.setPosition(0, 286);
+        // same compact row in every mode: +-620 only fits a 1320px HUD,
+        // which the 960px design resolution never shows
+        if (this.nameLabel) this.nameLabel.node.setPosition(-450, 286);
+        if (this.crystalLabel) this.crystalLabel.node.setPosition(-210, 286);
+        if (this.deathLabel) this.deathLabel.node.setPosition(80, 286);
+        if (this.timeLabel) this.timeLabel.node.setPosition(450, 286);
+        if (this.distLabel) this.distLabel.node.setPosition(0, -286);
     }
 
     private refreshRhythmSplitHud() {
@@ -1381,11 +1383,13 @@ export default class GameMgr extends cc.Component {
         this.rhythmTopRightBlindNode = mkRightBlind("rhythmTopRightBlindFx", 143);
         this.rhythmBottomRightBlindNode = mkRightBlind("rhythmBottomRightBlindFx", -143);
 
-        this.nameLabel = this.makeLabel(this.hud, -620, 286, 20, cyan, 0);
-        this.crystalLabel = this.makeLabel(this.hud, -40, 286, 18, white, 0.5);
-        this.deathLabel = this.makeLabel(this.hud, 330, 286, 20, pink, 0.5);
-        this.timeLabel = this.makeLabel(this.hud, 620, 286, 22, orange, 1);
-        this.distLabel = this.makeLabel(this.hud, 0, 286, 24, orange);
+        // top row must fit the 960px design width (visible x is +-480)
+        this.nameLabel = this.makeLabel(this.hud, -450, 286, 20, cyan, 0);
+        this.crystalLabel = this.makeLabel(this.hud, -210, 286, 18, white, 0);
+        this.deathLabel = this.makeLabel(this.hud, 80, 286, 18, pink, 0);
+        this.timeLabel = this.makeLabel(this.hud, 450, 286, 22, orange, 1);
+        // endless distance readout lives bottom-center, away from the top row
+        this.distLabel = this.makeLabel(this.hud, 0, -286, 24, orange);
         this.rhythmLabel = this.makeLabel(this.hud, 0, -262, 20, orange);
         this.rhythmAiLabel = this.makeLabel(this.hud, 0, 258, 18, cyan);
         this.rhythmEffectLabel = this.makeLabel(this.hud, 0, -232, 14, orange);
