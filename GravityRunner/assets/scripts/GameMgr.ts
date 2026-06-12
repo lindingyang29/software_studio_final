@@ -457,7 +457,10 @@ export default class GameMgr extends cc.Component {
 
         this.time = 0;
         this.deaths = 0;
-        this.health = GameData.carriedHealth > 0 ? GameData.carriedHealth : this.maxHealth;
+        this.maxHealth = this.endless ? 1 : 3;
+        this.health = GameData.carriedHealth > 0
+            ? Math.min(GameData.carriedHealth, this.maxHealth)
+            : this.maxHealth;
         GameData.carriedHealth = 0;
         this.crystalsTaken = 0;
         this.timeScale = 1;
@@ -597,12 +600,12 @@ export default class GameMgr extends cc.Component {
         this.slowOverlay.opacity = 0;
         this.hud.addChild(this.slowOverlay, -1);
 
-        this.nameLabel = this.makeLabel(this.hud, -450, 296, 20, cyan, 0);
-        this.crystalLabel = this.makeLabel(this.hud, -450, 268, 20, white, 0);
-        this.deathLabel = this.makeLabel(this.hud, -450, 240, 20, pink, 0);
-        this.timeLabel = this.makeLabel(this.hud, 450, 296, 20, orange, 1);
-        this.distLabel = this.makeLabel(this.hud, 0, 296, 24, orange);
-        this.rhythmLabel = this.makeLabel(this.hud, 0, 266, 20, orange);
+        this.nameLabel = this.makeLabel(this.hud, -450, 284, 22, cyan, 0);
+        this.crystalLabel = this.makeLabel(this.hud, -80, 284, 22, white, 0);
+        this.deathLabel = this.makeLabel(this.hud, 205, 284, 22, pink, 0);
+        this.timeLabel = this.makeLabel(this.hud, 450, 284, 24, orange, 1);
+        this.distLabel = this.makeLabel(this.hud, 0, 284, 26, orange);
+        this.rhythmLabel = this.makeLabel(this.hud, 0, 256, 22, orange);
         this.judgeLabel = this.makeLabel(this.hud, 0, 86, 34, white);
         this.msgLabel = this.makeLabel(this.hud, 0, 40, 44, white);
         this.subLabel = this.makeLabel(this.hud, 0, -10, 18, cyan);
@@ -865,6 +868,7 @@ export default class GameMgr extends cc.Component {
         }
         if (this.isRhythmLevel()) Sfx.stopBgm();
         this.deaths = 0;
+        this.maxHealth = this.endless ? 1 : 3;
         this.health = this.maxHealth;
         this.respawnAll();
         this.state = "ready";

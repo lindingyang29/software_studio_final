@@ -133,14 +133,14 @@ export default class Fb {
         if (!Fb.ready()) return done("not ready");
         Fb.sdk().auth().createUserWithEmailAndPassword(email, pw)
             .then(() => done(null))
-            .catch((e: any) => done(Fb.errMsg(e)));
+            .catch((e: any) => done(Fb.errMsg(e, false)));
     }
 
     static login(email: string, pw: string, done: (err: string) => void) {
         if (!Fb.ready()) return done("not ready");
         Fb.sdk().auth().signInWithEmailAndPassword(email, pw)
             .then(() => done(null))
-            .catch((e: any) => done(Fb.errMsg(e)));
+            .catch((e: any) => done(Fb.errMsg(e, true)));
     }
 
     static logout() {
@@ -151,8 +151,22 @@ export default class Fb {
         Fb.allowAuthChangeNoReload = true;
     }
 
-    private static errMsg(e: any): string {
-        return (e && e.code) ? String(e.code).replace("auth/", "").replace(/-/g, " ") : "error";
+    private static errMsg(e: any, loggingIn: boolean): string {
+        const code = (e && e.code) ? String(e.code).replace("auth/", "") : "";
+        if (loggingIn) {
+            if (code === "wrong-password"
+                || code === "user-not-found"
+                || code === "invalid-login-credentials"
+                || code === "internal-error") {
+                return "Incorrect email or password.";
+            }
+        }
+        if (code === "invalid-email") return "Invalid email address.";
+        if (code === "email-already-in-use") return "Email is already registered.";
+        if (code === "weak-password") return "Password is too weak.";
+        if (code === "too-many-requests") return "Too many attempts. Try again later.";
+        if (code === "network-request-failed") return "Network error. Please try again.";
+        return code ? code.replace(/-/g, " ") : "Error. Please try again.";
     }
 
     // ---------- progress sync ----------

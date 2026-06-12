@@ -204,10 +204,6 @@ export default class MenuCtrl extends cc.Component {
         this.bgNode = this.sprite(this.node, "bg", 0, 0, 970, 650);
         this.applyBgTint();
         if (!this.suppressFade) Fx.fadeIn(this.node);
-        if (!this.isStartScene() && Fb.enabled() && Fb.ready() && !Fb.user()) {
-            Fx.fadeTo("Start", this.node);
-            return;
-        }
 
         // title (with a short opening animation: pop in + pulse)
         const authStart = this.isStartScene();
