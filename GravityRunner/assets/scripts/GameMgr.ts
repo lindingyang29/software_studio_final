@@ -53,8 +53,8 @@ export default class GameMgr extends cc.Component {
     private resultPanel: cc.Node = null;
     private bumpCd = 0;
 
-    // online ghosts
-    private ghosts: { [uid: string]: { node: cc.Node; tx: number; ty: number; tsy: number } } = {};
+    // online ghosts (gvx/gvy = velocity estimate, col = remote opted in to collision)
+    private ghosts: { [uid: string]: { node: cc.Node; tx: number; ty: number; tsy: number; gvx: number; gvy: number; col: boolean; lastT: number } } = {};
     private liveAccum = 0;
     private liveOn = false;
 
@@ -389,11 +389,19 @@ export default class GameMgr extends cc.Component {
                 lb.lineHeight = 14;
                 n.addChild(ln);
                 this.world.addChild(n);
-                g = this.ghosts[e.uid] = { node: n, tx: d.x, ty: d.y, tsy: 1 };
+                g = this.ghosts[e.uid] = { node: n, tx: d.x, ty: d.y, tsy: 1, gvx: 0, gvy: 0, col: false, lastT: d.t || 0 };
             }
+            // velocity estimate from consecutive network samples
+            const dtNet = ((d.t || 0) - g.lastT) / 1000;
+            if (dtNet > 0.03 && dtNet < 2) {
+                g.gvx = (d.x - g.tx) / dtNet;
+                g.gvy = (d.y - g.ty) / dtNet;
+            }
+            g.lastT = d.t || 0;
             g.tx = d.x;
             g.ty = d.y;
             g.tsy = d.sy || 1;
+            g.col = !!d.col;
         }
         for (const uid in this.ghosts) {
             if (!seen[uid]) {
@@ -1446,6 +1454,7 @@ export default class GameMgr extends cc.Component {
                             x: Math.round(me.node.x),
                             y: Math.round(me.node.y),
                             sy: me.node.scaleY < 0 ? -1 : 1,
+                            col: GameData.settings.onlineCollide ? 1 : 0,
                             lv: this.liveLevelKey(),
                             n: Fb.userName(),
                             t: Date.now()
@@ -1522,6 +1531,42 @@ export default class GameMgr extends cc.Component {
         if (this.bumpCd > 0) this.bumpCd -= dt;
         if (GameData.players === 2 && this.players.length === 2) {
             this.playersCollide();
+        }
+        // online: collide with remote players who also opted in
+        if (GameData.settings.onlineCollide) {
+            this.ghostsCollide();
+        }
+    }
+
+    // Local-side elastic response against remote players' interpolated
+    // bodies. Both clients run the same symmetric logic, so the pair
+    // separates consistently; only the local player is ever moved here.
+    private ghostsCollide() {
+        for (const uid in this.ghosts) {
+            const g = this.ghosts[uid];
+            if (!g.col || !g.node.isValid) continue;
+            for (const p of this.players) {
+                if (!p.alive) continue;
+                const n = p.node;
+                const px = 34 - Math.abs(n.x - g.node.x);
+                if (px <= 0) continue;
+                const py = 36 - Math.abs(n.y - g.node.y);
+                if (py <= 0) continue;
+                if (py <= px) {
+                    const dir = n.y >= g.node.y ? 1 : -1;
+                    n.y += dir * py;
+                    p.setVelY((g.gvy || 0) * 0.9 + dir * 60);
+                } else {
+                    const dirx = n.x >= g.node.x ? 1 : -1;
+                    n.x += dirx * px;
+                    p.addPushX(dirx * 160);
+                }
+                if (this.bumpCd <= 0) {
+                    this.bumpCd = 0.15;
+                    Sfx.play("click", 0.5);
+                    Fx.crystal(this.world, (n.x + g.node.x) / 2, (n.y + g.node.y) / 2, cc.color(200, 220, 255));
+                }
+            }
         }
     }
 

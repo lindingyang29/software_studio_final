@@ -10,6 +10,7 @@ export interface Settings {
     rhythmJumpKeys: string; // comma-separated key names, e.g. f,j
     rhythmFlipKeys: string; // comma-separated key names, e.g. d,k
     rhythmSpeedScale: number; // rhythm scroll / flow multiplier, 0.1..2.0
+    onlineCollide: number;    // 0 = pass-through ghosts, 1 = elastic collision
 }
 
 export default class GameData {
@@ -74,7 +75,7 @@ export default class GameData {
     }
 
     private static loadSettings(): Settings {
-        const def: Settings = { sfx: 1, bgm: 0.6, speed: 1, scheme: 0, brightness: 1, rhythmGap: 280, rhythmJumpKeys: "f,j", rhythmFlipKeys: "d,k", rhythmSpeedScale: 1 };
+        const def: Settings = { sfx: 1, bgm: 0.6, speed: 1, scheme: 0, brightness: 1, rhythmGap: 280, rhythmJumpKeys: "f,j", rhythmFlipKeys: "d,k", rhythmSpeedScale: 1, onlineCollide: 0 };
         try {
             const raw = cc.sys.localStorage.getItem(GameData.SETTINGS_KEY);
             if (raw) {

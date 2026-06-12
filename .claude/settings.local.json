@@ -26,7 +26,9 @@
       "PowerShell($f = \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\GravityRunner\\\\assets\\\\scripts\\\\GameMgr.ts\"; \\(Get-Content $f | Select-String -Pattern \"<<<<<<<|^=======|>>>>>>>\" | ForEach-Object { \"$\\($_.LineNumber\\): $\\($_.Line\\)\" }\\))",
       "PowerShell(git add *)",
       "PowerShell(Set-Location \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\"; Select-String -Path GravityRunner\\\\assets\\\\scripts\\\\GameMgr.ts -Pattern \"onKeyDown|rhythmJump|rhythmFlip|jumpKeys|flipKeys|keyToName|isRhythmLevel\\\\\\(\\\\\\)\" | ForEach-Object { \"$\\($_.LineNumber\\): $\\($_.Line.Trim\\(\\)\\)\" } | Select-Object -First 30)",
-      "PowerShell(git checkout *)"
+      "PowerShell(git checkout *)",
+      "PowerShell(Select-String -Path \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\GravityRunner\\\\assets\\\\scripts\\\\GameData.ts\" -Pattern \"export interface Settings\" -Context 0,14 | ForEach-Object { $_.Context.PostContext })",
+      "PowerShell(Select-String -Path \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\GravityRunner\\\\assets\\\\scripts\\\\GameData.ts\" -Pattern \"const def: Settings\" | ForEach-Object { $_.Line.Trim\\(\\) })"
     ]
   }
 }

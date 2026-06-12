@@ -700,6 +700,9 @@ export default class MenuCtrl extends cc.Component {
         this.sliderRow(panel, nextY(), "BRIGHTNESS",
             () => s.brightness, (v) => { s.brightness = v; }, 0.6, 1, 0.05, pct,
             () => this.applyBgTint());
+        this.sliderRow(panel, nextY(), "ONLINE CONTACT",
+            () => s.onlineCollide ? 1 : 0, (v) => { s.onlineCollide = Math.round(v); }, 0, 1, 1,
+            (v) => Math.round(v) === 1 ? "COLLIDE" : "GHOST");
         const gaps = this.rhythmGapValues;
         this.sliderRow(panel, nextY(), "RHYTHM TRACK GAP",
             () => this.closestIndex(gaps, s.rhythmGap),
