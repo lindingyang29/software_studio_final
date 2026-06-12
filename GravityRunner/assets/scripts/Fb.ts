@@ -236,6 +236,97 @@ export default class Fb {
         }
     }
 
+    // ---------- rooms (host-started synced races) ----------
+    // Host:   leaderboard/{hostUid}/room   = { code, lv, start?, t }
+    // Member: leaderboard/{uid}/joined     = { code, name, t }
+    // Both are owner-writable under the existing rules and removed on
+    // disconnect, so rooms dissolve when the host drops.
+
+    private static serverOffset = 0;
+    private static offsetArmed = false;
+    private static roomArmed = false;
+    private static joinedArmed = false;
+    private static lobbyHandle: { ref: any; handler: any } = null;
+
+    static serverNow(): number {
+        return Date.now() + Fb.serverOffset;
+    }
+
+    private static armServerClock() {
+        if (Fb.offsetArmed || !Fb.ready()) return;
+        Fb.offsetArmed = true;
+        Fb.sdk().database().ref(".info/serverTimeOffset").on("value", (snap: any) => {
+            Fb.serverOffset = snap.val() || 0;
+        });
+    }
+
+    static createRoom(code: string, lv: number) {
+        if (!Fb.ready() || !Fb.authUser) return;
+        Fb.armServerClock();
+        const r = Fb.sdk().database().ref("leaderboard/" + Fb.authUser.uid + "/room");
+        if (!Fb.roomArmed) {
+            r.onDisconnect().remove();
+            Fb.roomArmed = true;
+        }
+        r.set({ code: code, lv: lv, t: Date.now() });
+    }
+
+    static startRoom(t0: number) {
+        if (!Fb.ready() || !Fb.authUser) return;
+        Fb.sdk().database().ref("leaderboard/" + Fb.authUser.uid + "/room/start").set(t0);
+    }
+
+    static joinRoom(code: string) {
+        if (!Fb.ready() || !Fb.authUser) return;
+        Fb.armServerClock();
+        const r = Fb.sdk().database().ref("leaderboard/" + Fb.authUser.uid + "/joined");
+        if (!Fb.joinedArmed) {
+            r.onDisconnect().remove();
+            Fb.joinedArmed = true;
+        }
+        r.set({ code: code, name: Fb.userName(), t: Date.now() });
+    }
+
+    static leaveRoom() {
+        if (!Fb.ready() || !Fb.authUser) return;
+        const db = Fb.sdk().database();
+        db.ref("leaderboard/" + Fb.authUser.uid + "/room").remove();
+        db.ref("leaderboard/" + Fb.authUser.uid + "/joined").remove();
+    }
+
+    // Streams the whole lobby picture: every open room and every member.
+    static lobbyListen(cb: (rooms: { uid: string; name: string; room: any }[],
+                            members: { uid: string; name: string; code: string }[]) => void) {
+        if (!Fb.ready()) return;
+        Fb.lobbyOff();
+        Fb.armServerClock();
+        const ref = Fb.sdk().database().ref("leaderboard");
+        const handler = (snap: any) => {
+            const rooms: { uid: string; name: string; room: any }[] = [];
+            const members: { uid: string; name: string; code: string }[] = [];
+            snap.forEach((child: any) => {
+                const v = child.val();
+                if (!v) return;
+                if (v.room && v.room.code) {
+                    rooms.push({ uid: child.key, name: v.name || "host", room: v.room });
+                }
+                if (v.joined && v.joined.code) {
+                    members.push({ uid: child.key, name: v.joined.name || "player", code: v.joined.code });
+                }
+            });
+            cb(rooms, members);
+        };
+        ref.on("value", handler);
+        Fb.lobbyHandle = { ref: ref, handler: handler };
+    }
+
+    static lobbyOff() {
+        if (Fb.lobbyHandle) {
+            Fb.lobbyHandle.ref.off("value", Fb.lobbyHandle.handler);
+            Fb.lobbyHandle = null;
+        }
+    }
+
     // ---------- live presence (online ghosts) ----------
     // Stored at leaderboard/{uid}/_live so it fits the existing security
     // rules (owner-writable, publicly readable). fetchTop skips it because

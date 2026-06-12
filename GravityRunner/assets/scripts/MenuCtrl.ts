@@ -23,6 +23,15 @@ export default class MenuCtrl extends cc.Component {
     private helpPanel: cc.Node = null;
     private uiSig = "";          // progress snapshot the UI was built from
     private suppressFade = false;
+    // online room lobby
+    private roomPanel: cc.Node = null;
+    private myRoom = "";
+    private roomIsHost = false;
+    private roomLaunched = false;
+    private lastRooms: { uid: string; name: string; room: any }[] = [];
+    private lastMembers: { uid: string; name: string; code: string }[] = [];
+    private roomMembersBox: cc.Node = null;
+    private roomStatus: cc.Label = null;
     private rhythmPanel: cc.Node = null;
     private keyBindPanel: cc.Node = null;
     private keyBindKind = "";
@@ -63,6 +72,10 @@ export default class MenuCtrl extends cc.Component {
         Sfx.preload();
         Sfx.playBgm("bgm_menu");
         Fb.init();
+        // back in the menu: any previous room participation ends here
+        GameData.roomCode = "";
+        GameData.roomT0 = 0;
+        Fb.leaveRoom();
         // When cloud slot data arrives after the scene was built (e.g. right
         // after the post-login reload), the level locks / best distance shown
         // are stale — rebuild the UI instead of just refreshing the label.
@@ -275,25 +288,19 @@ export default class MenuCtrl extends cc.Component {
             Fx.fadeTo("Editor", this.node);
         });
 
-        // account / saves / leaderboard row
-        const aBtn = this.sprite(this.node, "white", -160, -272, 150, 38, cc.color(35, 45, 95));
-        this.label(aBtn, "ACCOUNT", 0, 0, 16, white);
-        aBtn.on(cc.Node.EventType.TOUCH_END, () => {
-            Sfx.play("click", 0.8);
-            this.toggleAccount();
-        });
-        const sBtn2 = this.sprite(this.node, "white", 0, -272, 150, 38, cc.color(35, 45, 95));
-        this.label(sBtn2, "SAVES", 0, 0, 16, white);
-        sBtn2.on(cc.Node.EventType.TOUCH_END, () => {
-            Sfx.play("click", 0.8);
-            this.toggleSaves();
-        });
-        const rBtn = this.sprite(this.node, "white", 160, -272, 150, 38, cc.color(35, 45, 95));
-        this.label(rBtn, "RANKING", 0, 0, 16, white);
-        rBtn.on(cc.Node.EventType.TOUCH_END, () => {
-            Sfx.play("click", 0.8);
-            this.toggleBoard();
-        });
+        // account / saves / ranking / room row
+        const mkBottom = (text: string, x: number, color: cc.Color, cb: () => void) => {
+            const b = this.sprite(this.node, "white", x, -272, 145, 38, color);
+            this.label(b, text, 0, 0, 15, white);
+            b.on(cc.Node.EventType.TOUCH_END, () => {
+                Sfx.play("click", 0.8);
+                cb();
+            });
+        };
+        mkBottom("ACCOUNT", -240, cc.color(35, 45, 95), () => this.toggleAccount());
+        mkBottom("SAVES", -80, cc.color(35, 45, 95), () => this.toggleSaves());
+        mkBottom("RANKING", 80, cc.color(35, 45, 95), () => this.toggleBoard());
+        mkBottom("ROOM", 240, cc.color(58, 26, 84), () => this.toggleRoom());
 
         // login status (top-right corner)
         this.accountLabel = this.label(this.node, "", 462, 300, 14, dim, 1);
@@ -579,6 +586,16 @@ export default class MenuCtrl extends cc.Component {
         if (this.boardPanel) { this.boardPanel.destroy(); this.boardPanel = null; }
         if (this.savesPanel) { this.savesPanel.destroy(); this.savesPanel = null; }
         if (this.helpPanel) { this.helpPanel.destroy(); this.helpPanel = null; }
+        if (this.roomPanel) {
+            this.roomPanel.destroy();
+            this.roomPanel = null;
+            Fb.lobbyOff();
+            Fb.leaveRoom();
+            this.myRoom = "";
+            this.roomIsHost = false;
+            this.roomMembersBox = null;
+            this.roomStatus = null;
+        }
         if (this.rhythmPanel) { this.rhythmPanel.destroy(); this.rhythmPanel = null; }
         if (this.keyBindPanel) { this.keyBindPanel.destroy(); this.keyBindPanel = null; }
         this.keyBindKind = "";
@@ -588,7 +605,8 @@ export default class MenuCtrl extends cc.Component {
 
     private anyPanelOpen(): boolean {
         return !!(this.settingsPanel || this.accountPanel || this.boardPanel
-            || this.savesPanel || this.helpPanel || this.rhythmPanel || this.keyBindPanel);
+            || this.savesPanel || this.helpPanel || this.roomPanel
+            || this.rhythmPanel || this.keyBindPanel);
     }
 
     private toggleSettings() {
@@ -1006,6 +1024,178 @@ export default class MenuCtrl extends cc.Component {
             Sfx.play("click", 0.8);
             this.closePanels();
         });
+    }
+
+    // ---------- online room (host-started synced races) ----------
+
+    private toggleRoom() {
+        if (this.roomPanel) {
+            this.closePanels();
+            return;
+        }
+        this.closePanels();
+        this.roomLaunched = false;
+        this.buildRoomPanel();
+        Fb.lobbyListen((rooms, members) => this.onLobby(rooms, members));
+    }
+
+    private roomBase(title: string): cc.Node {
+        const panel = this.sprite(this.node, "white", 0, 0, 620, 500, cc.color(10, 12, 26));
+        panel.opacity = 248;
+        panel.zIndex = 50;
+        panel.on(cc.Node.EventType.TOUCH_START, (e: cc.Event) => e.stopPropagation());
+        this.roomPanel = panel;
+        this.label(panel, title, 0, 218, 26, cc.color(255, 181, 74));
+        const closeBtn = this.sprite(panel, "white", 0, -218, 160, 38, cc.color(50, 50, 60));
+        this.label(closeBtn, "CLOSE", 0, 0, 17, cc.color(235, 240, 255));
+        closeBtn.on(cc.Node.EventType.TOUCH_END, () => {
+            Sfx.play("click", 0.8);
+            this.closePanels();
+        });
+        return panel;
+    }
+
+    private buildRoomPanel() {
+        const white = cc.color(235, 240, 255);
+        const cyan = cc.color(127, 247, 255);
+        const dim = cc.color(110, 120, 150);
+        const panel = this.roomBase("ONLINE ROOM");
+
+        if (!Fb.user()) {
+            this.label(panel, "log in first (ACCOUNT panel)", 0, 40, 18, white);
+            return;
+        }
+
+        this.label(panel, "CREATE A ROOM — pick the level:", 0, 160, 16, dim);
+        const opts: { txt: string; lv: number }[] = [
+            { txt: "L1", lv: 1 }, { txt: "L2", lv: 2 }, { txt: "L3", lv: 3 },
+            { txt: "L4", lv: 4 }, { txt: "L5", lv: 5 }, { txt: "ENDLESS", lv: -1 }
+        ];
+        for (let i = 0; i < opts.length; i++) {
+            const o = opts[i];
+            const w = o.lv === -1 ? 120 : 70;
+            const x = -235 + i * 82 + (o.lv === -1 ? 28 : 0);
+            const b = this.sprite(panel, "white", x, 118, w, 42, cc.color(24, 34, 76));
+            this.label(b, o.txt, 0, 0, 16, white);
+            b.on(cc.Node.EventType.TOUCH_END, (e: cc.Event) => {
+                e.stopPropagation();
+                Sfx.play("click", 0.8);
+                const code = this.genRoomCode();
+                Fb.createRoom(code, o.lv);
+                this.myRoom = code;
+                this.roomIsHost = true;
+                this.buildRoomLobby(o.lv);
+            });
+        }
+
+        this.label(panel, "— or —", 0, 60, 14, dim);
+        this.label(panel, "JOIN A ROOM:", -220, 10, 16, dim, 0);
+        const codeEb = this.editBox(panel, -40, -40, 220, "room code", false);
+        const jBtn = this.sprite(panel, "white", 150, -40, 130, 44, cc.color(20, 70, 40));
+        this.label(jBtn, "JOIN", 0, 0, 17, white);
+        const status = this.label(panel, "", 0, -110, 15, cyan);
+        jBtn.on(cc.Node.EventType.TOUCH_END, (e: cc.Event) => {
+            e.stopPropagation();
+            Sfx.play("click", 0.8);
+            const code = codeEb.string.trim().toUpperCase();
+            if (!code) {
+                (status.getComponent(cc.Label)).string = "enter a room code";
+                return;
+            }
+            let found = false;
+            for (const r of this.lastRooms) {
+                if (r.room && r.room.code === code) { found = true; break; }
+            }
+            if (!found) {
+                (status.getComponent(cc.Label)).string = "room " + code + " not found";
+                return;
+            }
+            Fb.joinRoom(code);
+            this.myRoom = code;
+            this.roomIsHost = false;
+            this.buildRoomLobby(0);
+        });
+    }
+
+    private buildRoomLobby(lv: number) {
+        if (this.roomPanel) { this.roomPanel.destroy(); this.roomPanel = null; }
+        const white = cc.color(235, 240, 255);
+        const cyan = cc.color(127, 247, 255);
+        const dim = cc.color(110, 120, 150);
+        const panel = this.roomBase("ROOM  " + this.myRoom);
+
+        this.label(panel, this.roomIsHost
+            ? "you are the HOST — share the code, then press START"
+            : "waiting for the host to start...", 0, 170, 15, dim);
+        this.roomStatus = this.label(panel, "", 0, 140, 14, cyan).getComponent(cc.Label);
+
+        this.label(panel, "PLAYERS", 0, 105, 16, cc.color(255, 181, 74));
+        this.roomMembersBox = new cc.Node("members");
+        panel.addChild(this.roomMembersBox);
+        this.renderRoomMembers();
+
+        if (this.roomIsHost) {
+            const sBtn = this.sprite(panel, "white", 0, -150, 220, 50, cc.color(20, 90, 45));
+            this.label(sBtn, "START  (3s)", 0, 0, 19, white);
+            sBtn.on(cc.Node.EventType.TOUCH_END, (e: cc.Event) => {
+                e.stopPropagation();
+                Sfx.play("power", 0.9);
+                Fb.startRoom(Fb.serverNow() + 3500);
+            });
+        }
+    }
+
+    private renderRoomMembers() {
+        if (!this.roomMembersBox || !this.roomMembersBox.isValid) return;
+        this.roomMembersBox.removeAllChildren();
+        const names: string[] = [];
+        for (const r of this.lastRooms) {
+            if (r.room && r.room.code === this.myRoom) names.push(r.name + "  (host)");
+        }
+        for (const m of this.lastMembers) {
+            if (m.code === this.myRoom) names.push(m.name);
+        }
+        for (let i = 0; i < names.length && i < 6; i++) {
+            this.label(this.roomMembersBox, names[i], 0, 70 - i * 30, 16, cc.color(235, 240, 255));
+        }
+        if (this.roomStatus) this.roomStatus.string = names.length + " player(s) in room";
+    }
+
+    private onLobby(rooms: { uid: string; name: string; room: any }[],
+                    members: { uid: string; name: string; code: string }[]) {
+        this.lastRooms = rooms;
+        this.lastMembers = members;
+        if (!this.roomPanel || !this.roomPanel.isValid) return;
+        if (!this.myRoom) return;
+        this.renderRoomMembers();
+        // host pressed START (recent server timestamp) -> everyone launches
+        for (const r of rooms) {
+            if (!r.room || r.room.code !== this.myRoom) continue;
+            const t0 = r.room.start || 0;
+            if (t0 > Fb.serverNow() - 5000 && !this.roomLaunched) {
+                this.roomLaunched = true;
+                Fb.lobbyOff();
+                GameData.roomCode = this.myRoom;
+                GameData.roomT0 = t0;
+                GameData.players = 1;
+                GameData.currentLevelPath = "";
+                GameData.pendingState = null;
+                GameData.currentLevel = (r.room.lv === -1) ? -1 : (r.room.lv || 1);
+                Fx.fadeTo("Game", this.node);
+            }
+            return;
+        }
+        // room vanished (host left)
+        if (!this.roomIsHost && this.roomStatus) {
+            this.roomStatus.string = "room closed by host";
+        }
+    }
+
+    private genRoomCode(): string {
+        const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+        let code = "";
+        for (let i = 0; i < 4; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+        return code;
     }
 
     // ---------- save states panel (mid-run saves; saving happens in-game) ----------

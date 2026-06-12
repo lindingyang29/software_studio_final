@@ -53,6 +53,9 @@ export default class GameMgr extends cc.Component {
     private resultPanel: cc.Node = null;
     private bumpCd = 0;
 
+    // synced room start (server-clock timestamp; 0 = not a room race)
+    private roomT0 = 0;
+
     // online ghosts (gvx/gvy = velocity estimate, col = remote opted in to collision)
     private ghosts: { [uid: string]: { node: cc.Node; tx: number; ty: number; tsy: number; gvx: number; gvy: number; col: boolean; lastT: number } } = {};
     private liveAccum = 0;
@@ -173,6 +176,7 @@ export default class GameMgr extends cc.Component {
         this.state = "ready";
         this.setMsg(this.isRhythmLevel() ? "PRESS RHYTHM KEY TO START" : "PRESS SPACE TO RUN", this.controlsHint());
         this.startLive();
+        this.armRoomStart();
         // resume a mid-run save state, if one was loaded from the pause menu
         if (GameData.pendingState) {
             const ps = GameData.pendingState;
@@ -366,7 +370,13 @@ export default class GameMgr extends cc.Component {
         for (const e of entries) {
             if (e.uid === Fb.uid()) continue;
             const d = e.d;
-            if (d.lv !== this.liveLevelKey()) continue; // other mode/level
+            if (GameData.roomCode) {
+                // room race: only roommates are visible
+                if (d.room !== GameData.roomCode) continue;
+            } else {
+                if (d.room) continue;                         // private racers hidden
+                if (d.lv !== this.liveLevelKey()) continue;   // other mode/level
+            }
             if (!d.t || now - d.t > 7000) continue;       // stale
             seen[e.uid] = true;
             let g = this.ghosts[e.uid];
@@ -477,6 +487,16 @@ export default class GameMgr extends cc.Component {
         this.setMsg("PRESS SPACE TO RUN",
             this.controlsHint() + "    BEST " + GameData.getBestDist() + "m");
         this.startLive();
+        this.armRoomStart();
+    }
+
+    // Room races start everyone on the host's server-clock timestamp.
+    private armRoomStart() {
+        if (GameData.roomT0 > 0) {
+            this.roomT0 = GameData.roomT0;
+            GameData.roomT0 = 0;
+            this.setMsg("GET READY", "ROOM " + GameData.roomCode + " — synced start");
+        }
     }
 
     private appendChunk(frag: any, endX: number) {
@@ -729,6 +749,7 @@ export default class GameMgr extends cc.Component {
     private onAction(who: number) {
         switch (this.state) {
             case "ready":
+                if (this.roomT0 > 0) break; // room race: countdown starts the run
                 if (this.isRhythmLevel()) this.startRhythmRun();
                 else {
                     this.state = "run";
@@ -1433,6 +1454,18 @@ export default class GameMgr extends cc.Component {
             this.cameraNode.y = this.shakeT <= 0 ? 0
                 : (Math.random() * 2 - 1) * 16 * (this.shakeT / 0.35);
         }
+        // room race countdown (server clock)
+        if (this.state === "ready" && this.roomT0 > 0) {
+            const remain = (this.roomT0 - Fb.serverNow()) / 1000;
+            if (remain <= 0) {
+                this.roomT0 = 0;
+                this.state = "run";
+                this.setMsg("", "");
+                Sfx.play("power", 0.9);
+            } else {
+                this.msgLabel.string = remain <= 3 ? remain.toFixed(1) : "GET READY";
+            }
+        }
         // online ghosts: smooth remote players and broadcast our position
         if (this.liveOn) {
             for (const uid in this.ghosts) {
@@ -1455,6 +1488,7 @@ export default class GameMgr extends cc.Component {
                             y: Math.round(me.node.y),
                             sy: me.node.scaleY < 0 ? -1 : 1,
                             col: GameData.settings.onlineCollide ? 1 : 0,
+                            room: GameData.roomCode || null,
                             lv: this.liveLevelKey(),
                             n: Fb.userName(),
                             t: Date.now()

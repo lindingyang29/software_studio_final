@@ -28,6 +28,11 @@ export default class GameData {
     // is built (set by the pause-menu LOAD STATE flow).
     static pendingState: any = null;
 
+    // Online room race: code shown to/entered by players, and the host-set
+    // synchronized start time (server clock). Cleared when back in the menu.
+    static roomCode: string = "";
+    static roomT0 = 0;
+
     static readonly CUSTOM_KEY = "gfr_custom_level";
 
     static hasCustomLevel(): boolean {
