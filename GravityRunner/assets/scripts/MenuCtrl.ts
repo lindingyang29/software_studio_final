@@ -84,6 +84,7 @@ export default class MenuCtrl extends cc.Component {
         // after the post-login reload), the level locks / best distance shown
         // are stale — rebuild the UI instead of just refreshing the label.
         Fb.onChanged = () => {
+            if (Fx.isFading()) return;
             if (this.uiSig && this.uiSig !== this.progressSig()) {
                 this.rebuildUi();
             } else {
@@ -368,8 +369,14 @@ export default class MenuCtrl extends cc.Component {
     }
 
     private isStartScene(): boolean {
-        const s = cc.director.getScene();
-        return !!(s && s.name === "Start");
+        const s: any = cc.director.getScene();
+        if (s) {
+            if (s._id === "5a9a0499-a12e-4f3d-ad54-ff8fe9abfbd5") return true;
+            if (s._id === "d7c6863d-a130-454f-9ef3-2c70b659103a") return false;
+            if (s.name === "Start") return true;
+            if (s.name === "Menu") return false;
+        }
+        return (window as any).__gfrSceneHint === "Start";
     }
 
     private buildStartAuthScreen() {
@@ -524,7 +531,7 @@ export default class MenuCtrl extends cc.Component {
                 }
                 status.textContent = registering ? "saved to Firebase. loading..." : "loading your progress...";
                 this.removeAuthOverlay();
-                cc.director.loadScene("Menu");
+                Fx.fadeTo("Menu", this.node);
             });
         };
 
@@ -734,8 +741,8 @@ export default class MenuCtrl extends cc.Component {
         GameData.setUnlocked(1);
         GameData.setBestDist(0);
         Fb.noReloadOnNextAuthChange();
+        Fx.fadeTo("Start", this.node);
         Fb.logout();
-        cc.director.loadScene("Start");
     }
 
     private refreshModeButtons() {

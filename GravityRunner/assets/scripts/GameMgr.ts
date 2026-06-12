@@ -857,7 +857,7 @@ export default class GameMgr extends cc.Component {
         if (this.state === "loading" || this.players.length === 0) return;
         GameData.carriedHealth = 0;
         if (this.endless) {
-            cc.director.loadScene("Game"); // streamed chunks: clean reload
+            Fx.fadeTo("Game", this.hud); // streamed chunks: clean reload
             return;
         }
         this.unscheduleAllCallbacks();
@@ -1404,7 +1404,7 @@ export default class GameMgr extends cc.Component {
             this.setMsg("CRASHED", "HEALTH " + this.health + " / " + this.maxHealth);
             this.scheduleOnce(() => {
                 GameData.carriedHealth = this.health;
-                cc.director.loadScene("Game");
+                Fx.fadeTo("Game", this.hud);
             }, 0.8);
             return;
         }
