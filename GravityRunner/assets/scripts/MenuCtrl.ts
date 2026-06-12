@@ -140,6 +140,20 @@ export default class MenuCtrl extends cc.Component {
         return n;
     }
 
+    private rotatingBlock(frame: string, x: number, y: number, size: number, color: cc.Color, spinTime: number, floatAmp: number = 0): cc.Node {
+        const n = this.sprite(this.node, frame, x, y, size, size, color);
+        cc.tween(n).by(spinTime, { angle: 360 }).repeatForever().start();
+        if (floatAmp > 0) {
+            cc.tween(n)
+                .to(spinTime * 0.45, { y: y + floatAmp }, { easing: "sineInOut" })
+                .to(spinTime * 0.45, { y: y - floatAmp }, { easing: "sineInOut" })
+                .to(spinTime * 0.45, { y: y }, { easing: "sineInOut" })
+                .repeatForever()
+                .start();
+        }
+        return n;
+    }
+
     private progressSig(): string {
         return (Fb.ready() ? "ready" : "loading") + "|" + (Fb.user() ? Fb.uid() : "guest")
             + "|" + (this.isStartScene() ? "start" : "menu")
@@ -208,27 +222,21 @@ export default class MenuCtrl extends cc.Component {
 
         // title (with a short opening animation: pop in + pulse)
         const authStart = this.isStartScene();
-        const title = this.label(this.node, "Gravity", 0, authStart ? 92 : 276, authStart ? 68 : 46, cyan);
-        const title2 = this.label(this.node, "Running", 0, authStart ? 24 : 226, authStart ? 68 : 46, cyan);
+        const title = this.sprite(this.node, "title", 0, authStart ? 78 : 234, authStart ? 420 : 330, authStart ? 280 : 220);
         title.scale = 0;
-        title2.scale = 0;
+        title.opacity = 255;
         cc.tween(title)
             .to(0.6, { scale: 1 }, { easing: "backOut" })
-            .then(cc.tween()
-                .to(1.4, { opacity: 170 }, { easing: "sineInOut" })
-                .to(1.4, { opacity: 255 }, { easing: "sineInOut" })
-                .union()
-                .repeatForever())
+            .call(() => {
+                cc.tween(title)
+                    .repeatForever(
+                        cc.tween()
+                            .to(0.55, { opacity: 90 }, { easing: "sineInOut" })
+                            .to(0.55, { opacity: 255 }, { easing: "sineInOut" })
+                    )
+                    .start();
+            })
             .start();
-        cc.tween(title2)
-            .to(0.6, { scale: 1 }, { easing: "backOut" })
-            .then(cc.tween()
-                .to(1.4, { opacity: 170 }, { easing: "sineInOut" })
-                .to(1.4, { opacity: 255 }, { easing: "sineInOut" })
-                .union()
-                .repeatForever())
-            .start();
-        this.label(this.node, "- ESCAPE ASTRA-9 -", 0, authStart ? -34 : 178, authStart ? 20 : 18, orange);
 
         // opening animation: a runner cube dashes across the screen
         const opener = this.sprite(this.node, "player", -560, -150, 40, 40);
@@ -245,12 +253,8 @@ export default class MenuCtrl extends cc.Component {
         }
 
         // decorations
-        const deco = this.sprite(this.node, "player", -340, 60, 48, 48);
-        cc.tween(deco)
-            .to(1.2, { y: 85 }, { easing: "sineInOut" })
-            .to(1.2, { y: 60 }, { easing: "sineInOut" })
-            .repeatForever()
-            .start();
+        this.rotatingBlock("player", -380, 76, 48, null, 1.8, 18);
+        this.rotatingBlock("player2", 410, -78, 42, null, 1.4, 12);
         const deco2 = this.sprite(this.node, "player2", -340, -40, 40, 40);
         deco2.scaleY = -1;
         cc.tween(deco2)
@@ -258,8 +262,16 @@ export default class MenuCtrl extends cc.Component {
             .to(1.5, { y: -40 }, { easing: "sineInOut" })
             .repeatForever()
             .start();
-        const c1 = this.sprite(this.node, "crystal", 340, 20, 30, 30);
-        cc.tween(c1).by(2.4, { angle: 360 }).repeatForever().start();
+        cc.tween(deco2).by(1.8, { angle: -360 }).repeatForever().start();
+        this.rotatingBlock("crystal", 338, -28, 30, null, 2.4, 0);
+        this.rotatingBlock("player2", -430, 170, 20, null, 1.7, 8);
+        this.rotatingBlock("player", 430, -154, 20, null, 2.0, 10);
+        this.rotatingBlock("player2", -410, -160, 18, null, 1.5, 8);
+        this.rotatingBlock("crystal", 260, 174, 18, null, 2.2, 8);
+        this.rotatingBlock("player", -250, 246, 18, null, 1.9, 6);
+        this.rotatingBlock("player2", 452, 232, 18, null, 1.6, 6);
+        this.rotatingBlock("crystal", -452, -244, 18, null, 2.2, 7);
+        this.rotatingBlock("player2", 320, -262, 16, null, 1.5, 6);
 
         // mode select: 1P / 2P
         this.modeButtons = [];
@@ -385,14 +397,17 @@ export default class MenuCtrl extends cc.Component {
         const white = cc.color(235, 240, 255);
         const dim = cc.color(110, 120, 150);
 
-        const deco = this.sprite(this.node, "player", -330, 40, 48, 48);
-        cc.tween(deco)
-            .to(1.2, { y: 72 }, { easing: "sineInOut" })
-            .to(1.2, { y: 40 }, { easing: "sineInOut" })
-            .repeatForever()
-            .start();
-        const c1 = this.sprite(this.node, "crystal", 330, 20, 30, 30);
-        cc.tween(c1).by(2.4, { angle: 360 }).repeatForever().start();
+        this.rotatingBlock("player", -360, 54, 48, null, 1.8, 20);
+        this.rotatingBlock("player2", 360, 46, 42, null, 1.4, 14);
+        this.rotatingBlock("crystal", 330, -78, 30, null, 2.4, 0);
+        this.rotatingBlock("player2", 246, 154, 18, null, 1.7, 8);
+        this.rotatingBlock("player", 430, -174, 20, null, 2.0, 10);
+        this.rotatingBlock("player2", -420, -118, 18, null, 1.5, 8);
+        this.rotatingBlock("crystal", -250, 164, 18, null, 2.2, 8);
+        this.rotatingBlock("player", -236, 248, 18, null, 1.9, 6);
+        this.rotatingBlock("player2", 446, 234, 18, null, 1.6, 6);
+        this.rotatingBlock("crystal", -452, -244, 18, null, 2.2, 7);
+        this.rotatingBlock("player2", 322, -262, 16, null, 1.5, 6);
 
         if (!Fb.enabled()) {
             this.label(this.node, "Firebase is not configured.", 0, -12, 18, white);
