@@ -395,28 +395,6 @@
       ]
     },
     {
-      "id": "u30efu30bfu30b7u3060u3051",
-      "title": "ワタシだけ。",
-      "difficulties": [
-        {
-          "name": "EASY",
-          "path": "levels/rhythm/u30efu30bfu30b7u3060u3051_easy"
-        },
-        {
-          "name": "NORMAL",
-          "path": "levels/rhythm/u30efu30bfu30b7u3060u3051_normal"
-        },
-        {
-          "name": "HARD",
-          "path": "levels/rhythm/u30efu30bfu30b7u3060u3051_hard"
-        },
-        {
-          "name": "ONI",
-          "path": "levels/rhythm/u30efu30bfu30b7u3060u3051_oni"
-        }
-      ]
-    },
-    {
       "id": "u95c7u306eu9b54u6cd5u5c11u5973",
       "title": "闇の魔法少女",
       "difficulties": [
