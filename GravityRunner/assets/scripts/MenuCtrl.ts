@@ -44,6 +44,7 @@ export default class MenuCtrl extends cc.Component {
     private gatePassed = false;
     private readonly gateKey = "gfr_auth_gate";
     private authOverlay: HTMLElement = null;
+    private roomCodeInput: HTMLInputElement = null;
     private rhythmSongs: any[] = [
         {
             id: "summer",
@@ -116,6 +117,7 @@ export default class MenuCtrl extends cc.Component {
         cc.systemEvent.off(cc.SystemEvent.EventType.KEY_DOWN, this.onKeyDown, this);
         Fb.onChanged = null;
         this.removeAuthOverlay();
+        this.removeRoomCodeInput();
     }
 
     private sprite(parent: cc.Node, frame: string, x: number, y: number, w: number, h: number, color?: cc.Color): cc.Node {
@@ -429,14 +431,12 @@ export default class MenuCtrl extends cc.Component {
             return;
         }
 
-        const lBtn = this.sprite(this.node, "white", -96, -132, 170, 42, cc.color(20, 70, 40));
-        this.label(lBtn, "LOG IN", 0, 0, 18, white);
+        const lBtn = this.sprite(this.node, "Login", -112, -132, 190, 60);
         lBtn.on(cc.Node.EventType.TOUCH_END, () => {
             Sfx.play("click", 0.8);
             this.openAuthOverlay("login");
         });
-        const rBtn = this.sprite(this.node, "white", 96, -132, 170, 42, cc.color(40, 30, 70));
-        this.label(rBtn, "REGISTER", 0, 0, 18, white);
+        const rBtn = this.sprite(this.node, "register", 112, -132, 202, 60);
         rBtn.on(cc.Node.EventType.TOUCH_END, () => {
             Sfx.play("click", 0.8);
             this.openAuthOverlay("register");
@@ -602,6 +602,69 @@ export default class MenuCtrl extends cc.Component {
             this.authOverlay.parentNode.removeChild(this.authOverlay);
         }
         this.authOverlay = null;
+    }
+
+    private removeRoomCodeInput() {
+        if (this.roomCodeInput && this.roomCodeInput.parentNode) {
+            this.roomCodeInput.parentNode.removeChild(this.roomCodeInput);
+        }
+        this.roomCodeInput = null;
+    }
+
+    private placeRoomCodeInput(input: HTMLInputElement) {
+        const canvas = cc.game.canvas as HTMLCanvasElement;
+        if (!canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        const x = -40;
+        const y = -40;
+        const w = 220;
+        const h = 44;
+        const sx = rect.width / cc.winSize.width;
+        const sy = rect.height / cc.winSize.height;
+        const left = rect.left + rect.width / 2 + (x - w / 2) * sx;
+        const top = rect.top + rect.height / 2 - (y + h / 2) * sy;
+        input.style.left = Math.round(left) + "px";
+        input.style.top = Math.round(top) + "px";
+        input.style.width = Math.round(w * sx) + "px";
+        input.style.height = Math.round(h * sy) + "px";
+    }
+
+    private createRoomCodeInput(status?: cc.Label) {
+        if (!cc.sys.isBrowser || typeof document === "undefined") return;
+        this.removeRoomCodeInput();
+        const input = document.createElement("input");
+        input.type = "text";
+        input.placeholder = "room code";
+        input.maxLength = 4;
+        input.autocapitalize = "characters";
+        input.style.cssText = [
+            "position:fixed",
+            "box-sizing:border-box",
+            "padding:0 18px",
+            "background:#253060",
+            "border:0",
+            "outline:2px solid rgba(127,247,255,0.18)",
+            "color:#ebf0ff",
+            "font-family:monospace",
+            "font-size:20px",
+            "text-transform:uppercase",
+            "z-index:9998"
+        ].join(";");
+        input.addEventListener("input", () => {
+            input.value = input.value.toUpperCase().slice(0, 4);
+        });
+        input.addEventListener("keydown", (e: KeyboardEvent) => {
+            if (e.key === "Enter") {
+                e.preventDefault();
+                this.joinRoomCode(input.value, status);
+            }
+        });
+        document.body.appendChild(input);
+        this.roomCodeInput = input;
+        this.placeRoomCodeInput(input);
+        window.setTimeout(() => {
+            if (this.roomCodeInput) this.placeRoomCodeInput(this.roomCodeInput);
+        }, 0);
     }
 
     private buildAuthForm(mode: string) {
@@ -1100,6 +1163,7 @@ export default class MenuCtrl extends cc.Component {
         if (this.helpPanel) { this.helpPanel.destroy(); this.helpPanel = null; }
         if (this.customRoomPanel) { this.customRoomPanel.destroy(); this.customRoomPanel = null; }
         if (this.roomPanel) {
+            this.removeRoomCodeInput();
             this.roomPanel.destroy();
             this.roomPanel = null;
             Fb.lobbyOff();
@@ -1598,31 +1662,43 @@ export default class MenuCtrl extends cc.Component {
         });
 
         this.label(panel, "JOIN A ROOM:", -220, 10, 16, dim, 0);
-        const codeEb = this.editBox(panel, -40, -40, 220, "room code", false);
+        const codeBtn = this.sprite(panel, "white", -40, -40, 220, 44, cc.color(24, 34, 76));
         const jBtn = this.sprite(panel, "white", 150, -40, 130, 44, cc.color(20, 70, 40));
         this.label(jBtn, "JOIN", 0, 0, 17, white);
         const status = this.label(panel, "", 0, -110, 15, cyan);
+        const statusLabel = status.getComponent(cc.Label);
+        this.createRoomCodeInput(statusLabel);
+        codeBtn.on(cc.Node.EventType.TOUCH_END, (e: cc.Event) => {
+            e.stopPropagation();
+            if (this.roomCodeInput) this.roomCodeInput.focus();
+        });
         jBtn.on(cc.Node.EventType.TOUCH_END, (e: cc.Event) => {
             e.stopPropagation();
             Sfx.play("click", 0.8);
-            const code = codeEb.string.trim().toUpperCase();
-            if (!code) {
-                (status.getComponent(cc.Label)).string = "enter a room code";
-                return;
-            }
-            let found = false;
-            for (const r of this.lastRooms) {
-                if (r.room && r.room.code === code) { found = true; break; }
-            }
-            if (!found) {
-                (status.getComponent(cc.Label)).string = "room " + code + " not found";
-                return;
-            }
-            Fb.joinRoom(code);
-            this.myRoom = code;
-            this.roomIsHost = false;
-            this.buildRoomLobby(0);
+            this.joinRoomCode(this.roomCodeInput ? this.roomCodeInput.value : "", statusLabel);
         });
+    }
+
+    private joinRoomCode(code: string, status?: cc.Label): boolean {
+        code = String(code || "").trim().toUpperCase();
+        if (!code) {
+            if (status) status.string = "enter a room code";
+            return false;
+        }
+        let found = false;
+        for (const r of this.lastRooms) {
+            if (r.room && r.room.code === code) { found = true; break; }
+        }
+        if (!found) {
+            if (status) status.string = "room " + code + " not found";
+            return false;
+        }
+        Fb.joinRoom(code);
+        this.myRoom = code;
+        this.roomIsHost = false;
+        this.removeRoomCodeInput();
+        this.buildRoomLobby(0);
+        return true;
     }
 
     private loadEditorMapSlots(): any[] {
@@ -1701,6 +1777,7 @@ export default class MenuCtrl extends cc.Component {
     }
 
     private buildRoomLobby(lv: number) {
+        this.removeRoomCodeInput();
         if (this.roomPanel) { this.roomPanel.destroy(); this.roomPanel = null; }
         const white = cc.color(235, 240, 255);
         const cyan = cc.color(127, 247, 255);
