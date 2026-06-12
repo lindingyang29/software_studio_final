@@ -34,6 +34,9 @@ export default class EditorCtrl extends cc.Component {
     private previewNode: cc.Node = null;
     private pendingTeleport: { x: number; y: number } = null;
     private hintTimer = 0;
+    private mapPanel: cc.Node = null;
+    private selectedMapSlot = -1;
+    private readonly MAP_SLOTS_KEY = "gfr_editor_map_slots";
 
     onLoad() {
         Sfx.preload();
@@ -118,18 +121,10 @@ export default class EditorCtrl extends cc.Component {
     }
 
     private loadData() {
-        const raw = cc.sys.localStorage.getItem(GameData.CUSTOM_KEY);
-        if (raw) {
-            try {
-                this.data = JSON.parse(raw);
-            } catch (e) {
-                this.data = null;
-            }
-        }
-        if (!this.data || !this.data.goal) this.data = this.starterData();
+        this.data = this.starterData();
     }
 
-    private save(): boolean {
+    private saveCurrent(): boolean {
         // level length follows the content
         let maxX = this.data.goal.x;
         for (const s of this.data.segments) maxX = Math.max(maxX, s.x + s.w);
@@ -139,6 +134,125 @@ export default class EditorCtrl extends cc.Component {
             s.side === "floor" && s.x <= -320 && s.x + s.w >= -260);
         this.flashHint(hasStartFloor ? "SAVED!" : "SAVED — WARNING: NO FLOOR UNDER START (x=-300)!");
         return true;
+    }
+
+    private loadMapSlots(): any[] {
+        let slots: any[] = [];
+        try {
+            const raw = cc.sys.localStorage.getItem(this.MAP_SLOTS_KEY);
+            slots = raw ? JSON.parse(raw) : [];
+        } catch (e) {
+            slots = [];
+        }
+        while (slots.length < 3) slots.push(null);
+        return slots.slice(0, 3);
+    }
+
+    private saveMapSlots(slots: any[]) {
+        cc.sys.localStorage.setItem(this.MAP_SLOTS_KEY, JSON.stringify(slots.slice(0, 3)));
+    }
+
+    private mapSlotTitle(slot: any, idx: number): string {
+        if (!slot || !slot.data) return "SLOT " + (idx + 1) + "   EMPTY";
+        const d = new Date(slot.t || 0);
+        const pad = (v: number) => (v < 10 ? "0" + v : "" + v);
+        return "SLOT " + (idx + 1) + "   " + (slot.data.name || "MY LEVEL")
+            + "   " + (d.getMonth() + 1) + "/" + d.getDate()
+            + " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
+    }
+
+    private closeMapPanel() {
+        if (this.mapPanel) {
+            this.mapPanel.destroy();
+            this.mapPanel = null;
+        }
+        this.selectedMapSlot = -1;
+    }
+
+    private openMapPanel(selected: number = -1) {
+        this.closeMapPanel();
+        this.selectedMapSlot = selected;
+        const white = cc.color(235, 240, 255);
+        const orange = cc.color(255, 181, 74);
+        const dim = cc.color(110, 120, 150);
+        const slots = this.loadMapSlots();
+
+        const panel = new cc.Node("mapSlots");
+        const sp = panel.addComponent(cc.Sprite);
+        sp.spriteFrame = this.frames["white"];
+        sp.sizeMode = cc.Sprite.SizeMode.CUSTOM;
+        panel.setContentSize(560, selected >= 0 ? 320 : 270);
+        panel.setPosition(130, 26);
+        panel.color = cc.color(10, 12, 26);
+        panel.opacity = 248;
+        panel.zIndex = 80;
+        panel.on(cc.Node.EventType.TOUCH_START, (e: cc.Event) => e.stopPropagation());
+        this.ui.addChild(panel);
+        this.mapPanel = panel;
+
+        const title = new cc.Node("title");
+        title.setPosition(0, selected >= 0 ? 126 : 104);
+        title.color = orange;
+        const tl = title.addComponent(cc.Label);
+        tl.string = "MAP SLOTS";
+        tl.fontSize = 24;
+        tl.lineHeight = 28;
+        panel.addChild(title);
+
+        const note = new cc.Node("note");
+        note.setPosition(0, selected >= 0 ? 96 : 74);
+        note.color = dim;
+        const nl = note.addComponent(cc.Label);
+        nl.string = "choose a slot, then save or load it into the editor";
+        nl.fontSize = 13;
+        nl.lineHeight = 16;
+        panel.addChild(note);
+
+        for (let i = 0; i < 3; i++) {
+            const y = (selected >= 0 ? 52 : 30) - i * 48;
+            const row = this.mkBtn(panel, this.mapSlotTitle(slots[i], i), 0, y, 500,
+                i === selected ? cc.color(53, 100, 150) : cc.color(22, 30, 60), () => {
+                    Sfx.play("click", 0.6);
+                    this.openMapPanel(i);
+                });
+            const lb = row.getChildByName("l").getComponent(cc.Label);
+            lb.fontSize = 14;
+            lb.lineHeight = 16;
+            row.getChildByName("l").color = slots[i] ? white : dim;
+        }
+
+        if (selected >= 0) {
+            const slot = slots[selected];
+            this.mkBtn(panel, "SAVE", -72, -122, 118, cc.color(20, 70, 40), () => {
+                this.saveCurrent();
+                const next = this.loadMapSlots();
+                next[selected] = { t: Date.now(), data: JSON.parse(JSON.stringify(this.data)) };
+                this.saveMapSlots(next);
+                Sfx.play("power", 0.8);
+                this.flashHint("SAVED TO SLOT " + (selected + 1));
+                this.openMapPanel(selected);
+            });
+            const goBtn = this.mkBtn(panel, "GO TO MAP", 76, -122, 138,
+                slot ? cc.color(24, 34, 76) : cc.color(36, 38, 46), () => {
+                    const cur = this.loadMapSlots()[selected];
+                    if (!cur || !cur.data) {
+                        this.flashHint("SLOT " + (selected + 1) + " IS EMPTY");
+                        return;
+                    }
+                    this.data = JSON.parse(JSON.stringify(cur.data));
+                    cc.sys.localStorage.setItem(GameData.CUSTOM_KEY, JSON.stringify(this.data));
+                    this.rebuild();
+                    Sfx.play("click", 0.8);
+                    this.flashHint("LOADED SLOT " + (selected + 1));
+                    this.openMapPanel(selected);
+                });
+            goBtn.getChildByName("l").color = slot ? white : dim;
+        }
+
+        this.mkBtn(panel, "CLOSE", 0, selected >= 0 ? -164 : -108, 120, cc.color(50, 50, 60), () => {
+            Sfx.play("click", 0.6);
+            this.closeMapPanel();
+        });
     }
 
     // ---------- rendering ----------
@@ -266,9 +380,12 @@ export default class EditorCtrl extends cc.Component {
             spdBtn.getChildByName("l").getComponent(cc.Label).string = "SPD:" + this.data.speed;
             Sfx.play("click", 0.6);
         });
-        this.mkBtn(this.toolbar, "SAVE", -437, -24, 78, cc.color(20, 70, 40), () => { this.save(); Sfx.play("power", 0.7); });
+        this.mkBtn(this.toolbar, "SAVE", -437, -24, 78, cc.color(20, 70, 40), () => {
+            Sfx.play("click", 0.7);
+            this.openMapPanel();
+        });
         this.mkBtn(this.toolbar, "TEST", -353, -24, 78, cc.color(70, 55, 15), () => {
-            this.save();
+            this.saveCurrent();
             GameData.currentLevel = 0;
             Fx.fadeTo("Game", this.ui);
         });
