@@ -58,8 +58,8 @@ export default class GameMgr extends cc.Component {
     // synced room start (server-clock timestamp; 0 = not a room race)
     private roomT0 = 0;
 
-    // online ghosts (gvx/gvy = velocity estimate, col = remote opted in to collision)
-    private ghosts: { [uid: string]: { node: cc.Node; tx: number; ty: number; tsy: number; gvx: number; gvy: number; col: boolean; lastT: number; score: number; combo: number } } = {};
+    // online ghosts (gvx/gvy = local velocity estimate, col = remote opted in to collision)
+    private ghosts: { [uid: string]: { node: cc.Node; tx: number; ty: number; tsy: number; gvx: number; gvy: number; col: boolean; lastT: number; rxT: number; score: number; combo: number } } = {};
     private liveAccum = 0;
     private liveOn = false;
 
@@ -599,32 +599,33 @@ export default class GameMgr extends cc.Component {
             if (!g) {
                 const n = new cc.Node("ghost");
                 const sp = n.addComponent(cc.Sprite);
-                sp.spriteFrame = this.frames["player"];
+                sp.spriteFrame = this.frames["player2"] || this.frames["player"];
                 sp.sizeMode = cc.Sprite.SizeMode.CUSTOM;
                 n.setContentSize(36, 36);
-                n.opacity = 110;
-                n.color = cc.color(160, 170, 210);
+                n.opacity = 205;
+                n.color = cc.Color.WHITE;
                 n.zIndex = 4;
                 n.setPosition(d.x, this.rhythmSplitBattle && this.isRhythmLevel() ? this.rhythmOpponentYFromPlayerY(Number(d.y) || 0) : d.y);
                 const ln = new cc.Node("name");
                 ln.setPosition(0, 34);
-                ln.color = cc.color(200, 210, 240);
+                ln.color = cc.color(255, 181, 74);
                 const lb = ln.addComponent(cc.Label);
                 lb.string = d.n || "ghost";
                 lb.fontSize = 12;
                 lb.lineHeight = 14;
                 n.addChild(ln);
                 this.world.addChild(n);
-                g = this.ghosts[e.uid] = { node: n, tx: d.x, ty: this.rhythmSplitBattle && this.isRhythmLevel() ? this.rhythmOpponentYFromPlayerY(Number(d.y) || 0) : d.y, tsy: 1, gvx: 0, gvy: 0, col: false, lastT: d.t || 0, score: d.score || 0, combo: d.combo || 0 };
+                g = this.ghosts[e.uid] = { node: n, tx: d.x, ty: this.rhythmSplitBattle && this.isRhythmLevel() ? this.rhythmOpponentYFromPlayerY(Number(d.y) || 0) : d.y, tsy: 1, gvx: 0, gvy: 0, col: false, lastT: d.t || 0, rxT: now, score: d.score || 0, combo: d.combo || 0 };
             }
             // velocity estimate from consecutive network samples
-            const dtNet = ((d.t || 0) - g.lastT) / 1000;
+            const dtNet = (now - g.rxT) / 1000;
             if (dtNet > 0.03 && dtNet < 2) {
                 const mappedY = this.rhythmSplitBattle && this.isRhythmLevel() ? this.rhythmOpponentYFromPlayerY(Number(d.y) || 0) : d.y;
                 g.gvx = (d.x - g.tx) / dtNet;
                 g.gvy = (mappedY - g.ty) / dtNet;
             }
             g.lastT = d.t || 0;
+            g.rxT = now;
             g.tx = d.x;
             g.ty = this.rhythmSplitBattle && this.isRhythmLevel() ? this.rhythmOpponentYFromPlayerY(Number(d.y) || 0) : d.y;
             g.tsy = d.sy || 1;
@@ -2105,16 +2106,24 @@ export default class GameMgr extends cc.Component {
         if (this.liveOn) {
             for (const uid in this.ghosts) {
                 const g = this.ghosts[uid];
-                const k = Math.min(1, 10 * dt);
-                g.node.x += (g.tx - g.node.x) * k;
-                g.node.y += (g.ty - g.node.y) * k;
+                const lead = Math.min(0.16, Math.max(0, (Date.now() - g.rxT) / 1000));
+                const px = g.tx + Math.max(-260, Math.min(260, g.gvx || 0)) * lead;
+                const py = g.ty + Math.max(-520, Math.min(520, g.gvy || 0)) * lead;
+                const dist = Math.abs(px - g.node.x) + Math.abs(py - g.node.y);
+                if (dist > 260) {
+                    g.node.setPosition(px, py);
+                } else {
+                    const k = Math.min(1, 16 * dt);
+                    g.node.x += (px - g.node.x) * k;
+                    g.node.y += (py - g.node.y) * k;
+                }
                 g.node.scaleY = g.tsy;
                 const nameN = g.node.getChildByName("name");
                 if (nameN) nameN.scaleY = g.tsy; // keep the name upright
             }
             if (this.state === "run" && Fb.user()) {
                 this.liveAccum += dt;
-                if (this.liveAccum >= 0.12) {
+                if (this.liveAccum >= 0.06) {
                     this.liveAccum = 0;
                     const me = this.anyAlive();
                     if (me) {
