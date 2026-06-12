@@ -23,6 +23,28 @@
       ]
     },
     {
+      "id": "Bad_Apple!!_feat.nomico",
+      "title": "Bad Apple!! feat.nomico",
+      "difficulties": [
+        {
+          "name": "EASY",
+          "path": "levels/rhythm/Bad_Apple!!_feat.nomico_easy"
+        },
+        {
+          "name": "NORMAL",
+          "path": "levels/rhythm/Bad_Apple!!_feat.nomico_normal"
+        },
+        {
+          "name": "HARD",
+          "path": "levels/rhythm/Bad_Apple!!_feat.nomico_hard"
+        },
+        {
+          "name": "ONI",
+          "path": "levels/rhythm/Bad_Apple!!_feat.nomico_oni"
+        }
+      ]
+    },
+    {
       "id": "Campus_Mode!!",
       "title": "Campus Mode!!",
       "difficulties": [
@@ -115,6 +137,50 @@
       ]
     },
     {
+      "id": "Hacking_to_the_Gate",
+      "title": "Hacking to the Gate",
+      "difficulties": [
+        {
+          "name": "EASY",
+          "path": "levels/rhythm/Hacking_to_the_Gate_easy"
+        },
+        {
+          "name": "NORMAL",
+          "path": "levels/rhythm/Hacking_to_the_Gate_normal"
+        },
+        {
+          "name": "HARD",
+          "path": "levels/rhythm/Hacking_to_the_Gate_hard"
+        },
+        {
+          "name": "ONI",
+          "path": "levels/rhythm/Hacking_to_the_Gate_oni"
+        }
+      ]
+    },
+    {
+      "id": "Little_Busters!",
+      "title": "Little Busters!",
+      "difficulties": [
+        {
+          "name": "EASY",
+          "path": "levels/rhythm/Little_Busters!_easy"
+        },
+        {
+          "name": "NORMAL",
+          "path": "levels/rhythm/Little_Busters!_normal"
+        },
+        {
+          "name": "HARD",
+          "path": "levels/rhythm/Little_Busters!_hard"
+        },
+        {
+          "name": "ONI",
+          "path": "levels/rhythm/Little_Busters!_oni"
+        }
+      ]
+    },
+    {
       "id": "My_Soul,Your_Beats!",
       "title": "My Soul,Your Beats!",
       "difficulties": [
@@ -133,6 +199,32 @@
         {
           "name": "ONI",
           "path": "levels/rhythm/My_Soul,Your_Beats!_oni"
+        }
+      ]
+    },
+    {
+      "id": "Re_End_of_a_Dream",
+      "title": "Re：End of a Dream",
+      "difficulties": [
+        {
+          "name": "EASY",
+          "path": "levels/rhythm/Re_End_of_a_Dream_easy"
+        },
+        {
+          "name": "NORMAL",
+          "path": "levels/rhythm/Re_End_of_a_Dream_normal"
+        },
+        {
+          "name": "HARD",
+          "path": "levels/rhythm/Re_End_of_a_Dream_hard"
+        },
+        {
+          "name": "ONI",
+          "path": "levels/rhythm/Re_End_of_a_Dream_oni"
+        },
+        {
+          "name": "EDIT",
+          "path": "levels/rhythm/Re_End_of_a_Dream_edit"
         }
       ]
     },
@@ -159,6 +251,32 @@
         {
           "name": "EDIT",
           "path": "levels/rhythm/Sweetest_Bitterness_edit"
+        }
+      ]
+    },
+    {
+      "id": "Unwelcome_School_(MRM_REMIX)",
+      "title": "Unwelcome School (MRM REMIX)",
+      "difficulties": [
+        {
+          "name": "EASY",
+          "path": "levels/rhythm/Unwelcome_School_(MRM_REMIX)_easy"
+        },
+        {
+          "name": "NORMAL",
+          "path": "levels/rhythm/Unwelcome_School_(MRM_REMIX)_normal"
+        },
+        {
+          "name": "HARD",
+          "path": "levels/rhythm/Unwelcome_School_(MRM_REMIX)_hard"
+        },
+        {
+          "name": "ONI",
+          "path": "levels/rhythm/Unwelcome_School_(MRM_REMIX)_oni"
+        },
+        {
+          "name": "EDIT",
+          "path": "levels/rhythm/Unwelcome_School_(MRM_REMIX)_edit"
         }
       ]
     },
@@ -229,6 +347,28 @@
       ]
     },
     {
+      "id": "u3082u307au3082u307a",
+      "title": "もぺもぺ",
+      "difficulties": [
+        {
+          "name": "EASY",
+          "path": "levels/rhythm/u3082u307au3082u307a_easy"
+        },
+        {
+          "name": "NORMAL",
+          "path": "levels/rhythm/u3082u307au3082u307a_normal"
+        },
+        {
+          "name": "HARD",
+          "path": "levels/rhythm/u3082u307au3082u307a_hard"
+        },
+        {
+          "name": "ONI",
+          "path": "levels/rhythm/u3082u307au3082u307a_oni"
+        }
+      ]
+    },
+    {
       "id": "u3084u308fu3089u304bu6226u8eca",
       "title": "やわらか戦車",
       "difficulties": [
@@ -255,6 +395,50 @@
       ]
     },
     {
+      "id": "u30efu30bfu30b7u3060u3051",
+      "title": "ワタシだけ。",
+      "difficulties": [
+        {
+          "name": "EASY",
+          "path": "levels/rhythm/u30efu30bfu30b7u3060u3051_easy"
+        },
+        {
+          "name": "NORMAL",
+          "path": "levels/rhythm/u30efu30bfu30b7u3060u3051_normal"
+        },
+        {
+          "name": "HARD",
+          "path": "levels/rhythm/u30efu30bfu30b7u3060u3051_hard"
+        },
+        {
+          "name": "ONI",
+          "path": "levels/rhythm/u30efu30bfu30b7u3060u3051_oni"
+        }
+      ]
+    },
+    {
+      "id": "u95c7u306eu9b54u6cd5u5c11u5973",
+      "title": "闇の魔法少女",
+      "difficulties": [
+        {
+          "name": "EASY",
+          "path": "levels/rhythm/u95c7u306eu9b54u6cd5u5c11u5973_easy"
+        },
+        {
+          "name": "NORMAL",
+          "path": "levels/rhythm/u95c7u306eu9b54u6cd5u5c11u5973_normal"
+        },
+        {
+          "name": "HARD",
+          "path": "levels/rhythm/u95c7u306eu9b54u6cd5u5c11u5973_hard"
+        },
+        {
+          "name": "ONI",
+          "path": "levels/rhythm/u95c7u306eu9b54u6cd5u5c11u5973_oni"
+        }
+      ]
+    },
+    {
       "id": "u590fu796du308a",
       "title": "夏祭り",
       "difficulties": [
@@ -273,6 +457,28 @@
         {
           "name": "ONI",
           "path": "levels/rhythm/u590fu796du308a_oni"
+        }
+      ]
+    },
+    {
+      "id": "u6700u7d42u9b3cu755cu59b9u30d5u30e9u30f3u30c9u30fcu30ebu30fbS",
+      "title": "最終鬼畜妹フランドール・S",
+      "difficulties": [
+        {
+          "name": "EASY",
+          "path": "levels/rhythm/u6700u7d42u9b3cu755cu59b9u30d5u30e9u30f3u30c9u30fcu30ebu30fbS_easy"
+        },
+        {
+          "name": "NORMAL",
+          "path": "levels/rhythm/u6700u7d42u9b3cu755cu59b9u30d5u30e9u30f3u30c9u30fcu30ebu30fbS_normal"
+        },
+        {
+          "name": "HARD",
+          "path": "levels/rhythm/u6700u7d42u9b3cu755cu59b9u30d5u30e9u30f3u30c9u30fcu30ebu30fbS_hard"
+        },
+        {
+          "name": "ONI",
+          "path": "levels/rhythm/u6700u7d42u9b3cu755cu59b9u30d5u30e9u30f3u30c9u30fcu30ebu30fbS_oni"
         }
       ]
     },
@@ -483,6 +689,32 @@
         {
           "name": "ONI",
           "path": "levels/rhythm/u6a84!u5e1du56fdu83efu6483u56e3_oni"
+        }
+      ]
+    },
+    {
+      "id": "u8309u5b50u306eu65e5u5e38",
+      "title": "茉子の日常",
+      "difficulties": [
+        {
+          "name": "EASY",
+          "path": "levels/rhythm/u8309u5b50u306eu65e5u5e38_easy"
+        },
+        {
+          "name": "NORMAL",
+          "path": "levels/rhythm/u8309u5b50u306eu65e5u5e38_normal"
+        },
+        {
+          "name": "HARD",
+          "path": "levels/rhythm/u8309u5b50u306eu65e5u5e38_hard"
+        },
+        {
+          "name": "ONI",
+          "path": "levels/rhythm/u8309u5b50u306eu65e5u5e38_oni"
+        },
+        {
+          "name": "EDIT",
+          "path": "levels/rhythm/u8309u5b50u306eu65e5u5e38_edit"
         }
       ]
     }
