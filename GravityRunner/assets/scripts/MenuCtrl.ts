@@ -833,18 +833,51 @@ export default class MenuCtrl extends cc.Component {
         }
     }
 
+    // cc.EditBox created via addComponent has NO internal background/label
+    // nodes (the editor normally creates those), so build them explicitly.
     private editBox(parent: cc.Node, x: number, y: number, w: number, placeholder: string, password: boolean): cc.EditBox {
+        const h = 44;
         const n = new cc.Node("eb");
         n.setPosition(x, y);
-        n.setContentSize(w, 42);
+        n.setContentSize(w, h);
+        parent.addChild(n);
+
+        const bgN = new cc.Node("bg");
+        const bg = bgN.addComponent(cc.Sprite);
+        bg.spriteFrame = this.frames["white"];
+        bg.sizeMode = cc.Sprite.SizeMode.CUSTOM;
+        bgN.setContentSize(w, h);
+        bgN.color = cc.color(28, 38, 80);
+        n.addChild(bgN);
+
+        const mkLabel = (name: string, color: cc.Color) => {
+            const ln = new cc.Node(name);
+            ln.setContentSize(w - 24, h);
+            ln.anchorX = 0;
+            ln.anchorY = 0.5;
+            ln.setPosition(-w / 2 + 12, 0);
+            ln.color = color;
+            const lb = ln.addComponent(cc.Label);
+            lb.string = "";
+            lb.fontSize = 18;
+            lb.lineHeight = h;
+            lb.horizontalAlign = cc.Label.HorizontalAlign.LEFT;
+            lb.verticalAlign = cc.Label.VerticalAlign.CENTER;
+            lb.overflow = cc.Label.Overflow.CLAMP;
+            n.addChild(ln);
+            return lb;
+        };
+        const textLb = mkLabel("text", cc.color(235, 240, 255));
+        const phLb = mkLabel("placeholder", cc.color(130, 140, 170));
+        phLb.string = placeholder;
+
         const eb = n.addComponent(cc.EditBox);
-        eb.backgroundImage = this.frames["white"];
+        eb.background = bg;
+        eb.textLabel = textLb;
+        eb.placeholderLabel = phLb;
         eb.placeholder = placeholder;
         eb.maxLength = 60;
-        eb.fontSize = 18;
-        eb.placeholderFontSize = 16;
         if (password) eb.inputFlag = cc.EditBox.InputFlag.PASSWORD;
-        parent.addChild(n);
         return eb;
     }
 

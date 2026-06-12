@@ -28,7 +28,10 @@
       "PowerShell(Set-Location \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\"; Select-String -Path GravityRunner\\\\assets\\\\scripts\\\\GameMgr.ts -Pattern \"onKeyDown|rhythmJump|rhythmFlip|jumpKeys|flipKeys|keyToName|isRhythmLevel\\\\\\(\\\\\\)\" | ForEach-Object { \"$\\($_.LineNumber\\): $\\($_.Line.Trim\\(\\)\\)\" } | Select-Object -First 30)",
       "PowerShell(git checkout *)",
       "PowerShell(Select-String -Path \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\GravityRunner\\\\assets\\\\scripts\\\\GameData.ts\" -Pattern \"export interface Settings\" -Context 0,14 | ForEach-Object { $_.Context.PostContext })",
-      "PowerShell(Select-String -Path \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\GravityRunner\\\\assets\\\\scripts\\\\GameData.ts\" -Pattern \"const def: Settings\" | ForEach-Object { $_.Line.Trim\\(\\) })"
+      "PowerShell(Select-String -Path \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\GravityRunner\\\\assets\\\\scripts\\\\GameData.ts\" -Pattern \"const def: Settings\" | ForEach-Object { $_.Line.Trim\\(\\) })",
+      "PowerShell(Select-String -Path \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\GravityRunner\\\\assets\\\\scripts\\\\MenuCtrl.ts\" -Pattern \"cc.EditBox created via addComponent has NO internal|mkLabel\" | ForEach-Object { \"$\\($_.LineNumber\\): $\\($_.Line.Trim\\(\\)\\)\" })",
+      "PowerShell(Select-String -Path \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\GravityRunner\\\\assets\\\\scripts\\\\MenuCtrl.ts\" -Pattern \"private editBox\" -Context 0,18 | ForEach-Object { $_.Line; $_.Context.PostContext })",
+      "PowerShell(Set-Location \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\"; Write-Output \"=== builder.json check ===\"; Select-String -Path GravityRunner\\\\settings\\\\builder.json -Pattern \"startScene|title\" | ForEach-Object { $_.Line.Trim\\(\\) }; Write-Output \"=== other silent reverts? diff base..HEAD for suspect files ===\"; git diff 1ffbe9c HEAD --stat -- tools/ collab/BOARD.md | Select-Object -Last 6)"
     ]
   }
 }

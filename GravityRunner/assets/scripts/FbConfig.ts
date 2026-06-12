@@ -16,10 +16,13 @@
 //         }
 //       }
 const FB_CONFIG: any = {
-    apiKey: "",
-    authDomain: "mario-1145141919810.firebaseapp.com",
-    databaseURL: "https://mario-1145141919810-default-rtdb.firebaseio.com",
-    projectId: "mario-1145141919810"
+    apiKey: "AIzaSyBJaEAZfwuTOxUlwaV71SFAU2LtBwLzU0A",
+    authDomain: "gravity-runner-2e4da.firebaseapp.com",
+    databaseURL: "https://gravity-runner-2e4da-default-rtdb.firebaseio.com",
+    projectId: "gravity-runner-2e4da",
+    storageBucket: "gravity-runner-2e4da.firebasestorage.app",
+    messagingSenderId: "1030039014162",
+    appId: "1:1030039014162:web:0af5e4e97d60f2a64941cb"
 };
 
 export default FB_CONFIG;
