@@ -39,22 +39,10 @@ export default class Sfx {
         return out;
     }
 
-    private static safeResourceName(name: string): string {
-        const s = String(name || "").replace(/#U([0-9a-fA-F]{4})/g, (_m, h) => "u" + String(h).toLowerCase());
-        let out = "";
-        for (let i = 0; i < s.length; i++) {
-            const c = s.charCodeAt(i);
-            out += c > 127 ? ("u" + c.toString(16).padStart(4, "0")) : s.charAt(i);
-        }
-        return out;
-    }
-
     private static musicCandidates(name: string): string[] {
         const norm = String(name || "bgm_menu").trim().replace(/^audio\//, "").replace(/\.(ogg|wav|mp3)$/i, "");
-        const safe = Sfx.safeResourceName(norm);
         const esc = Sfx.escapeResourceName(norm);
-        // Safe first: # in resource names can break web URLs.
-        const arr = [safe, norm, esc];
+        const arr = [norm, esc];
         const out: string[] = [];
         for (const p of arr) if (p && out.indexOf(p) < 0) out.push(p);
         return out;
@@ -97,15 +85,6 @@ export default class Sfx {
         tryLoad(0);
     }
 
-    static seekMusic(seconds: number) {
-        if (Sfx.bgmId < 0) return;
-        try {
-            cc.audioEngine.setCurrentTime(Sfx.bgmId, Math.max(0, seconds));
-        } catch (e) {
-            // Some platforms may not support seeking all formats; keep playing.
-        }
-    }
-
     static getMusicTime(): number {
         if (Sfx.bgmId < 0) return 0;
         try {
@@ -113,6 +92,13 @@ export default class Sfx {
         } catch (e) {
             return 0;
         }
+    }
+
+    static seekMusic(seconds: number) {
+        if (Sfx.bgmId < 0) return;
+        try {
+            cc.audioEngine.setCurrentTime(Sfx.bgmId, Math.max(0, seconds || 0));
+        } catch (e) { /* old runtimes may not support seeking every format */ }
     }
 
     static pauseMusic() {
