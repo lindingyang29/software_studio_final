@@ -9,7 +9,7 @@ import Fb from "./Fb";
 
 const { ccclass } = cc._decorator;
 
-type GameState = "loading" | "ready" | "run" | "dead" | "win" | "paused";
+type GameState = "loading" | "ready" | "run" | "dead" | "win" | "gameover" | "paused";
 
 // Owns the Game scene: loads assets + level JSON, builds the world through
 // LevelBuilder, spawns 1-2 Players, and runs the ready/run/dead/win state machine.
@@ -17,7 +17,7 @@ type GameState = "loading" | "ready" | "run" | "dead" | "win" | "paused";
 //
 // Co-op rules (GameData.players === 2): P1 = W key, P2 = UP/SPACE.
 // If one player dies while the partner survives, they revive next to the
-// partner after 3s. If everyone is dead, the level restarts.
+// partner after 3s. Each death costs team health; at 0 health, the run fails.
 @ccclass
 export default class GameMgr extends cc.Component {
 
@@ -34,6 +34,8 @@ export default class GameMgr extends cc.Component {
     private state: GameState = "loading";
     private time = 0;
     private deaths = 0;
+    private maxHealth = 3;
+    private health = 3;
     private crystalsTaken = 0;
     private slowT = 0;
     private enemyT = 0;
@@ -455,6 +457,8 @@ export default class GameMgr extends cc.Component {
 
         this.time = 0;
         this.deaths = 0;
+        this.health = GameData.carriedHealth > 0 ? GameData.carriedHealth : this.maxHealth;
+        GameData.carriedHealth = 0;
         this.crystalsTaken = 0;
         this.timeScale = 1;
         this.enemyT = 0;
@@ -524,7 +528,7 @@ export default class GameMgr extends cc.Component {
     }
 
     private endlessGameOver() {
-        this.state = "win"; // reuses win input flow: SPACE = retry, ESC = menu
+        this.state = "gameover";
         this.unscheduleAllCallbacks();
         const meters = Math.floor(this.distPx / 10);
         const best = GameData.getBestDist();
@@ -544,7 +548,7 @@ export default class GameMgr extends cc.Component {
                     "CRYSTALS " + this.crystalsTaken + "    TIME " + this.formatTime(this.time)
                 ],
                 [
-                    { text: "RETRY (SPACE)", cb: () => this.proceedAfterWin() },
+                    { text: "RESTART", cb: () => this.fullRestart() },
                     { text: "MENU (ESC)", cb: () => Fx.fadeTo("Menu", this.hud) }
                 ]);
         }, 0.5);
@@ -613,7 +617,7 @@ export default class GameMgr extends cc.Component {
                 ? "CRYSTALS  " + this.crystalsTaken
                 : "CRYSTALS  " + this.crystalsTaken + " / " + this.level.totalCrystals;
         }
-        this.deathLabel.string = this.isRhythmLevel() ? "MISSES  " + this.rhythmMiss : "DEATHS  " + this.deaths;
+        this.deathLabel.string = "HEALTH  " + this.health + " / " + this.maxHealth;
         this.timeLabel.string = this.formatTime(this.time);
         this.updateRhythmHud();
     }
@@ -713,7 +717,7 @@ export default class GameMgr extends cc.Component {
                 this.togglePause();
                 break;
             case cc.macro.KEY.q:
-                if (this.state === "paused" || this.state === "loading") {
+                if (this.state === "paused" || this.state === "loading" || this.state === "win" || this.state === "gameover") {
                     Fx.fadeTo("Menu", this.hud);
                 }
                 break;
@@ -733,6 +737,9 @@ export default class GameMgr extends cc.Component {
                 break;
             case "win":
                 this.proceedAfterWin();
+                break;
+            case "gameover":
+                this.fullRestart();
                 break;
         }
     }
@@ -772,6 +779,9 @@ export default class GameMgr extends cc.Component {
             case "win":
                 this.proceedAfterWin();
                 break;
+            case "gameover":
+                this.fullRestart();
+                break;
         }
     }
 
@@ -785,7 +795,7 @@ export default class GameMgr extends cc.Component {
             if (this.isRhythmLevel()) Sfx.resumeMusic();
             this.closePauseMenu();
             this.setMsg("", "");
-        } else if (this.state === "win") {
+        } else if (this.state === "win" || this.state === "gameover") {
             Fx.fadeTo("Menu", this.hud);
         }
     }
@@ -842,13 +852,20 @@ export default class GameMgr extends cc.Component {
 
     private fullRestart() {
         if (this.state === "loading" || this.players.length === 0) return;
+        GameData.carriedHealth = 0;
         if (this.endless) {
             cc.director.loadScene("Game"); // streamed chunks: clean reload
             return;
         }
         this.unscheduleAllCallbacks();
         this.closePauseMenu();
+        if (this.resultPanel) {
+            this.resultPanel.destroy();
+            this.resultPanel = null;
+        }
         if (this.isRhythmLevel()) Sfx.stopBgm();
+        this.deaths = 0;
+        this.health = this.maxHealth;
         this.respawnAll();
         this.state = "ready";
         this.setMsg(this.isRhythmLevel() ? "PRESS RHYTHM KEY TO START" : "PRESS SPACE TO RUN", this.controlsHint());
@@ -1288,6 +1305,27 @@ export default class GameMgr extends cc.Component {
             .start();
     }
 
+    private buildGameOverPanel(lines: string[]) {
+        this.state = "gameover";
+        this.unscheduleAllCallbacks();
+        if (this.isRhythmLevel()) Sfx.stopBgm();
+        this.timeScale = 1;
+        this.slowT = 0;
+        if (this.slowOverlay) this.slowOverlay.opacity = 0;
+        this.msgLabel.node.color = cc.color(235, 240, 255);
+        this.setMsg("", "");
+        this.scheduleOnce(() => {
+            this.buildResultPanel(
+                "GAME OVER",
+                cc.color(255, 90, 100),
+                lines,
+                [
+                    { text: "RESTART", cb: () => this.fullRestart() },
+                    { text: "MENU", cb: () => Fx.fadeTo("Menu", this.hud) }
+                ]);
+        }, 0.45);
+    }
+
     // ---------- callbacks from Player ----------
 
     private isInRollBonusWindow(): boolean {
@@ -1316,12 +1354,29 @@ export default class GameMgr extends cc.Component {
     onDeath(dead: Player) {
         if (this.state !== "run") return;
         this.deaths++;
+        this.health = Math.max(0, this.health - 1);
         Sfx.play("death", 0.8);
         // hit feel: brief hit-stop + camera shake
         this.hitStopT = 0.09;
         this.timeScale = 0.05;
         this.shakeT = 0.35;
         this.refreshHud();
+
+        if (this.health <= 0) {
+            if (this.endless) {
+                this.endlessGameOver();
+                return;
+            }
+            const lines = this.isRhythmLevel()
+                ? [this.rhythmSummary(), "TIME   " + this.formatTime(this.time), "HEALTH   0 / " + this.maxHealth]
+                : [
+                    "CRYSTALS   " + this.crystalsTaken + " / " + this.level.totalCrystals,
+                    "TIME   " + this.formatTime(this.time),
+                    "HEALTH   0 / " + this.maxHealth
+                ];
+            this.buildGameOverPanel(lines);
+            return;
+        }
 
         const survivor = this.anyAlive();
         if (survivor) {
@@ -1332,18 +1387,29 @@ export default class GameMgr extends cc.Component {
                 const s = this.anyAlive();
                 if (this.state === "run" && s) {
                     dead.respawnAt(s.node.x - 50, s.node.y, s.getGravityDir());
+                    this.refreshHud();
                 }
             }, 3);
             return;
         }
 
         // everyone is down
+        if (this.endless) {
+            this.state = "dead";
+            this.unscheduleAllCallbacks();
+            this.setMsg("CRASHED", "HEALTH " + this.health + " / " + this.maxHealth);
+            this.scheduleOnce(() => {
+                GameData.carriedHealth = this.health;
+                cc.director.loadScene("Game");
+            }, 0.8);
+            return;
+        }
         if (this.isRhythmLevel()) {
             this.state = "dead";
             this.unscheduleAllCallbacks();
             Sfx.stopBgm();
             this.msgLabel.node.color = cc.color(255, 90, 100);
-            this.setMsg("FAILED", this.rhythmSummary());
+            this.setMsg("LIFE LOST", "HEALTH " + this.health + " / " + this.maxHealth);
             this.scheduleOnce(() => {
                 this.msgLabel.node.color = cc.color(235, 240, 255);
                 this.respawnAll();
@@ -1352,15 +1418,11 @@ export default class GameMgr extends cc.Component {
             }, 1.0);
             return;
         }
-        if (this.endless) {
-            this.endlessGameOver();
-            return;
-        }
         // brief fail screen, then auto-retry to keep the rhythm going
         this.state = "dead";
         this.unscheduleAllCallbacks();
         this.msgLabel.node.color = cc.color(255, 90, 100);
-        this.setMsg("FAILED", "");
+        this.setMsg("LIFE LOST", "HEALTH " + this.health + " / " + this.maxHealth);
         this.scheduleOnce(() => {
             this.msgLabel.node.color = cc.color(235, 240, 255);
             this.setMsg("", "");
@@ -1404,13 +1466,16 @@ export default class GameMgr extends cc.Component {
             : [
                 "CRYSTALS   " + this.crystalsTaken + " / " + this.level.totalCrystals,
                 "TIME   " + this.formatTime(this.time),
-                "DEATHS   " + this.deaths
+                "HEALTH   " + this.health + " / " + this.maxHealth
             ];
         const buttons = custom
             ? [{ text: "EDITOR (SPACE)", cb: () => this.proceedAfterWin() },
                { text: "MENU (ESC)", cb: () => Fx.fadeTo("Menu", this.hud) }]
             : last
-            ? [{ text: "MENU (SPACE)", cb: () => this.proceedAfterWin() }]
+            ? (pathLevel || rhythm
+                ? [{ text: "MENU", cb: () => this.proceedAfterWin() }]
+                : [{ text: "ENDLESS", cb: () => this.proceedAfterWin() },
+                   { text: "MENU", cb: () => Fx.fadeTo("Menu", this.hud) }])
             : [{ text: "NEXT (SPACE)", cb: () => this.proceedAfterWin() },
                { text: "MENU (ESC)", cb: () => Fx.fadeTo("Menu", this.hud) }];
         // let the suck-into-portal animation play before the panel pops
@@ -1432,7 +1497,9 @@ export default class GameMgr extends cc.Component {
             GameData.currentLevel++;
             Fx.fadeTo("Game", this.hud);
         } else {
-            Fx.fadeTo("Menu", this.hud);
+            GameData.currentLevelPath = "";
+            GameData.currentLevel = -1;
+            Fx.fadeTo("Game", this.hud);
         }
     }
 

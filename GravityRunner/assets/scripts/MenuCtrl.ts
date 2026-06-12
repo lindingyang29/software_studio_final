@@ -39,6 +39,9 @@ export default class MenuCtrl extends cc.Component {
     private keyBindStatus: cc.Label = null;
     private accountLabel: cc.Node = null;
     private accountStatus: cc.Node = null;
+    private gatePassed = false;
+    private readonly gateKey = "gfr_auth_gate";
+    private authOverlay: HTMLElement = null;
     private rhythmSongs: any[] = [
         {
             id: "summer",
@@ -71,6 +74,7 @@ export default class MenuCtrl extends cc.Component {
     onLoad() {
         Sfx.preload();
         Sfx.playBgm("bgm_menu");
+        this.gatePassed = this.getGate();
         Fb.init();
         // back in the menu: any previous room participation ends here
         GameData.roomCode = "";
@@ -100,13 +104,14 @@ export default class MenuCtrl extends cc.Component {
                 this.buildUi();
             });
         });
-        cc.director.preloadScene("Game");
+        cc.director.preloadScene(this.isStartScene() ? "Menu" : "Game");
         cc.systemEvent.on(cc.SystemEvent.EventType.KEY_DOWN, this.onKeyDown, this);
     }
 
     onDestroy() {
         cc.systemEvent.off(cc.SystemEvent.EventType.KEY_DOWN, this.onKeyDown, this);
         Fb.onChanged = null;
+        this.removeAuthOverlay();
     }
 
     private sprite(parent: cc.Node, frame: string, x: number, y: number, w: number, h: number, color?: cc.Color): cc.Node {
@@ -135,7 +140,26 @@ export default class MenuCtrl extends cc.Component {
     }
 
     private progressSig(): string {
-        return GameData.getUnlocked() + "|" + GameData.getBestDist();
+        return (Fb.ready() ? "ready" : "loading") + "|" + (Fb.user() ? Fb.uid() : "guest")
+            + "|" + (this.isStartScene() ? "start" : "menu")
+            + "|" + GameData.getUnlocked() + "|" + GameData.getBestDist();
+    }
+
+    private getGate(): boolean {
+        if (!cc.sys.isBrowser || !(window as any).sessionStorage) return false;
+        return (window as any).sessionStorage.getItem(this.gateKey) === "1";
+    }
+
+    private saveGate() {
+        if (cc.sys.isBrowser && (window as any).sessionStorage) {
+            (window as any).sessionStorage.setItem(this.gateKey, "1");
+        }
+    }
+
+    private clearGate() {
+        if (cc.sys.isBrowser && (window as any).sessionStorage) {
+            (window as any).sessionStorage.removeItem(this.gateKey);
+        }
     }
 
     private rebuildUi() {
@@ -180,10 +204,17 @@ export default class MenuCtrl extends cc.Component {
         this.bgNode = this.sprite(this.node, "bg", 0, 0, 970, 650);
         this.applyBgTint();
         if (!this.suppressFade) Fx.fadeIn(this.node);
+        if (!this.isStartScene() && Fb.enabled() && Fb.ready() && !Fb.user()) {
+            Fx.fadeTo("Start", this.node);
+            return;
+        }
 
         // title (with a short opening animation: pop in + pulse)
-        const title = this.label(this.node, "GRAVITY FLIP RUNNER", 0, 230, 56, cyan);
+        const authStart = this.isStartScene();
+        const title = this.label(this.node, "Gravity", 0, authStart ? 92 : 276, authStart ? 68 : 46, cyan);
+        const title2 = this.label(this.node, "Running", 0, authStart ? 24 : 226, authStart ? 68 : 46, cyan);
         title.scale = 0;
+        title2.scale = 0;
         cc.tween(title)
             .to(0.6, { scale: 1 }, { easing: "backOut" })
             .then(cc.tween()
@@ -192,7 +223,15 @@ export default class MenuCtrl extends cc.Component {
                 .union()
                 .repeatForever())
             .start();
-        this.label(this.node, "— ESCAPE ASTRA-9 —", 0, 178, 18, orange);
+        cc.tween(title2)
+            .to(0.6, { scale: 1 }, { easing: "backOut" })
+            .then(cc.tween()
+                .to(1.4, { opacity: 170 }, { easing: "sineInOut" })
+                .to(1.4, { opacity: 255 }, { easing: "sineInOut" })
+                .union()
+                .repeatForever())
+            .start();
+        this.label(this.node, "- ESCAPE ASTRA-9 -", 0, authStart ? -34 : 178, authStart ? 20 : 18, orange);
 
         // opening animation: a runner cube dashes across the screen
         const opener = this.sprite(this.node, "player", -560, -150, 40, 40);
@@ -201,6 +240,12 @@ export default class MenuCtrl extends cc.Component {
             .call(() => opener.destroy())
             .start();
         cc.tween(opener).by(1.1, { angle: -720 }).start();
+
+        if (authStart) {
+            this.buildStartAuthScreen();
+            this.uiSig = this.progressSig();
+            return;
+        }
 
         // decorations
         const deco = this.sprite(this.node, "player", -340, 60, 48, 48);
@@ -288,19 +333,20 @@ export default class MenuCtrl extends cc.Component {
             Fx.fadeTo("Editor", this.node);
         });
 
-        // account / saves / ranking / room row
+        // account / saves / ranking / room / logout row
         const mkBottom = (text: string, x: number, color: cc.Color, cb: () => void) => {
-            const b = this.sprite(this.node, "white", x, -272, 145, 38, color);
-            this.label(b, text, 0, 0, 15, white);
+            const b = this.sprite(this.node, "white", x, -272, 118, 38, color);
+            this.label(b, text, 0, 0, 14, white);
             b.on(cc.Node.EventType.TOUCH_END, () => {
                 Sfx.play("click", 0.8);
                 cb();
             });
         };
-        mkBottom("ACCOUNT", -240, cc.color(35, 45, 95), () => this.toggleAccount());
-        mkBottom("SAVES", -80, cc.color(35, 45, 95), () => this.toggleSaves());
-        mkBottom("RANKING", 80, cc.color(35, 45, 95), () => this.toggleBoard());
-        mkBottom("ROOM", 240, cc.color(58, 26, 84), () => this.toggleRoom());
+        mkBottom("ACCOUNT", -256, cc.color(35, 45, 95), () => this.toggleAccount());
+        mkBottom("SAVES", -128, cc.color(35, 45, 95), () => this.toggleSaves());
+        mkBottom("RANKING", 0, cc.color(35, 45, 95), () => this.toggleBoard());
+        mkBottom("ROOM", 128, cc.color(58, 26, 84), () => this.toggleRoom());
+        mkBottom("LOG OUT", 256, cc.color(70, 25, 35), () => this.logoutToStart());
 
         // login status (top-right corner)
         this.accountLabel = this.label(this.node, "", 462, 300, 14, dim, 1);
@@ -319,6 +365,381 @@ export default class MenuCtrl extends cc.Component {
             0, -308, 15, dim);
 
         this.uiSig = this.progressSig();
+    }
+
+    private shouldShowMainMenu(): boolean {
+        return !this.isStartScene();
+    }
+
+    private isStartScene(): boolean {
+        const s = cc.director.getScene();
+        return !!(s && s.name === "Start");
+    }
+
+    private buildStartAuthScreen() {
+        const cyan = cc.color(127, 247, 255);
+        const orange = cc.color(255, 181, 74);
+        const white = cc.color(235, 240, 255);
+        const dim = cc.color(110, 120, 150);
+
+        const deco = this.sprite(this.node, "player", -330, 40, 48, 48);
+        cc.tween(deco)
+            .to(1.2, { y: 72 }, { easing: "sineInOut" })
+            .to(1.2, { y: 40 }, { easing: "sineInOut" })
+            .repeatForever()
+            .start();
+        const c1 = this.sprite(this.node, "crystal", 330, 20, 30, 30);
+        cc.tween(c1).by(2.4, { angle: 360 }).repeatForever().start();
+
+        if (!Fb.enabled()) {
+            this.label(this.node, "Firebase is not configured.", 0, -12, 18, white);
+            this.label(this.node, "Online account progress is unavailable.", 0, -42, 15, dim);
+            const offlineBtn = this.sprite(this.node, "white", 0, -118, 180, 42, cc.color(35, 45, 95));
+            this.label(offlineBtn, "PLAY OFFLINE", 0, 0, 17, white);
+            offlineBtn.on(cc.Node.EventType.TOUCH_END, () => {
+                Sfx.play("click", 0.8);
+                this.rebuildUi();
+            });
+            return;
+        }
+
+        if (!Fb.ready()) {
+            this.label(this.node, "CONNECTING TO FIREBASE...", 0, -24, 18, white);
+            return;
+        }
+
+        const lBtn = this.sprite(this.node, "white", -96, -132, 170, 42, cc.color(20, 70, 40));
+        this.label(lBtn, "LOG IN", 0, 0, 18, white);
+        lBtn.on(cc.Node.EventType.TOUCH_END, () => {
+            Sfx.play("click", 0.8);
+            this.openAuthOverlay("login");
+        });
+        const rBtn = this.sprite(this.node, "white", 96, -132, 170, 42, cc.color(40, 30, 70));
+        this.label(rBtn, "REGISTER", 0, 0, 18, white);
+        rBtn.on(cc.Node.EventType.TOUCH_END, () => {
+            Sfx.play("click", 0.8);
+            this.openAuthOverlay("register");
+        });
+    }
+
+    private openAuthOverlay(mode: string) {
+        if (!cc.sys.isBrowser || typeof document === "undefined") {
+            this.buildAuthForm(mode);
+            return;
+        }
+        this.removeAuthOverlay();
+
+        const registering = mode === "register";
+        const accent = registering ? "#281e46" : "#144628";
+        const accentLight = registering ? "#70cff0" : "#78e6a0";
+
+        const backdrop = document.createElement("div");
+        backdrop.style.cssText = [
+            "position:fixed",
+            "left:0",
+            "top:0",
+            "width:100%",
+            "height:100%",
+            "display:flex",
+            "align-items:center",
+            "justify-content:center",
+            "background:rgba(0,0,0,0.68)",
+            "z-index:9999",
+            "font-family:monospace"
+        ].join(";");
+
+        const card = document.createElement("div");
+        card.style.cssText = [
+            "width:360px",
+            "max-width:86vw",
+            "background:#0a0c1a",
+            "border:2px solid #5fe1eb",
+            "box-shadow:0 12px 44px rgba(0,0,0,0.65)",
+            "padding:30px 34px 28px"
+        ].join(";");
+
+        const title = document.createElement("div");
+        title.textContent = registering ? "REGISTER" : "LOG IN";
+        title.style.cssText = "color:#ffb54a;font-size:28px;text-align:center;letter-spacing:3px;margin-bottom:22px";
+        card.appendChild(title);
+
+        const email = this.mkDomInput(card, "EMAIL", "email", "email");
+        const pass = this.mkDomInput(card, "PASSWORD", "password", "password");
+
+        const status = document.createElement("div");
+        status.style.cssText = "min-height:20px;color:#ffb54a;font-size:13px;text-align:center;margin:4px 0 10px";
+        card.appendChild(status);
+
+        const submit = document.createElement("button");
+        submit.textContent = registering ? "REGISTER" : "LOG IN";
+        submit.style.cssText = [
+            "width:100%",
+            "height:44px",
+            "background:" + accent,
+            "border:2px solid " + accentLight,
+            "color:#ebf0ff",
+            "font-family:monospace",
+            "font-size:18px",
+            "letter-spacing:2px",
+            "cursor:pointer"
+        ].join(";");
+        card.appendChild(submit);
+
+        const cancel = document.createElement("button");
+        cancel.textContent = "CANCEL";
+        cancel.style.cssText = [
+            "width:100%",
+            "height:34px",
+            "margin-top:9px",
+            "background:transparent",
+            "border:1px solid #4d5269",
+            "color:#9ca5c6",
+            "font-family:monospace",
+            "font-size:14px",
+            "letter-spacing:1px",
+            "cursor:pointer"
+        ].join(";");
+        card.appendChild(cancel);
+
+        backdrop.appendChild(card);
+        document.body.appendChild(backdrop);
+        this.authOverlay = backdrop;
+
+        const doSubmit = () => {
+            const em = email.value.trim();
+            const pp = pass.value;
+            if (!em || !pp) {
+                status.textContent = "enter email and password";
+                return;
+            }
+            status.textContent = registering ? "creating account..." : "logging in...";
+            submit.setAttribute("disabled", "true");
+            if (registering) {
+                GameData.setUnlocked(1);
+                GameData.setBestDist(0);
+            }
+            Fb.noReloadOnNextAuthChange();
+            const fn = registering ? Fb.register : Fb.login;
+            fn(em, pp, (err) => {
+                if (err) {
+                    status.textContent = err;
+                    submit.removeAttribute("disabled");
+                    return;
+                }
+                status.textContent = registering ? "saved to Firebase. loading..." : "loading your progress...";
+                this.removeAuthOverlay();
+                cc.director.loadScene("Menu");
+            });
+        };
+
+        submit.onclick = doSubmit;
+        cancel.onclick = () => this.removeAuthOverlay();
+        email.addEventListener("keydown", (e: KeyboardEvent) => {
+            if (e.key === "Enter") {
+                e.preventDefault();
+                pass.focus();
+            }
+        });
+        pass.addEventListener("keydown", (e: KeyboardEvent) => {
+            if (e.key === "Enter") {
+                e.preventDefault();
+                doSubmit();
+            }
+        });
+        window.setTimeout(() => email.focus(), 50);
+    }
+
+    private mkDomInput(parent: HTMLElement, label: string, type: string, placeholder: string): HTMLInputElement {
+        const wrap = document.createElement("div");
+        wrap.style.cssText = "margin-bottom:16px";
+        const lb = document.createElement("label");
+        lb.textContent = label;
+        lb.style.cssText = "display:block;color:#96a5dc;font-size:14px;letter-spacing:1px;margin-bottom:6px";
+        const input = document.createElement("input");
+        input.type = type;
+        input.placeholder = placeholder;
+        input.style.cssText = [
+            "box-sizing:border-box",
+            "width:100%",
+            "height:40px",
+            "padding:0 14px",
+            "background:#70cfd8",
+            "border:0",
+            "outline:none",
+            "color:#081024",
+            "font-family:monospace",
+            "font-size:20px"
+        ].join(";");
+        wrap.appendChild(lb);
+        wrap.appendChild(input);
+        parent.appendChild(wrap);
+        return input;
+    }
+
+    private removeAuthOverlay() {
+        if (this.authOverlay && this.authOverlay.parentNode) {
+            this.authOverlay.parentNode.removeChild(this.authOverlay);
+        }
+        this.authOverlay = null;
+    }
+
+    private buildAuthForm(mode: string) {
+        this.closePanels();
+        const white = cc.color(235, 240, 255);
+        const orange = cc.color(255, 181, 74);
+        const dim = cc.color(110, 120, 150);
+
+        const panel = this.sprite(this.node, "white", 0, -20, 520, 330, cc.color(10, 12, 26));
+        panel.opacity = 248;
+        panel.zIndex = 50;
+        panel.on(cc.Node.EventType.TOUCH_START, (e: cc.Event) => e.stopPropagation());
+        this.accountPanel = panel;
+
+        const registering = mode === "register";
+        this.label(panel, registering ? "REGISTER" : "LOG IN", 0, 126, 30, orange);
+        this.label(panel, registering ? "Create a Firebase account." : "Load your Firebase progress.", 0, 92, 15, dim);
+        this.label(panel, "EMAIL", -188, 66, 13, cc.color(150, 165, 220), 0);
+        this.authFieldBg(panel, 0, 40, 384, 34);
+        const email = this.authEditBox(panel, 0, 40, 360, "email", false);
+        this.label(panel, "PASSWORD", -188, 8, 13, cc.color(150, 165, 220), 0);
+        this.authFieldBg(panel, 0, -18, 384, 34);
+        const pw = this.authEditBox(panel, 0, -18, 360, "password (6+ chars)", true);
+        this.accountStatus = this.label(panel, "", 0, -126, 15, orange);
+        const status = (s: string) => {
+            if (this.accountStatus && this.accountStatus.isValid) {
+                (this.accountStatus.getComponent(cc.Label)).string = s;
+            }
+        };
+        const submit = () => {
+            const em = email.value().trim();
+            const pp = pw.value();
+            if (!em || !pp) return status("enter email and password");
+            status(registering ? "creating account..." : "logging in...");
+            if (registering) {
+                GameData.setUnlocked(1);
+                GameData.setBestDist(0);
+            }
+            const fn = registering ? Fb.register : Fb.login;
+            fn(em, pp, (err) => {
+                if (err) {
+                    status(err);
+                    return;
+                }
+                this.gatePassed = true;
+                this.saveGate();
+                status(registering ? "saved to Firebase. loading..." : "loading your progress...");
+                this.scheduleOnce(() => this.rebuildUi(), 0.15);
+            });
+        };
+        email.box.returnType = cc.EditBox.KeyboardReturnType.NEXT;
+        pw.box.returnType = cc.EditBox.KeyboardReturnType.DONE;
+        email.box.node.on("text-changed", () => {
+            if (email.value().indexOf("\n") < 0 && email.value().indexOf("\r") < 0) return;
+            email.setValue(email.value().replace(/[\r\n]/g, ""));
+            this.scheduleOnce(() => pw.focus(), 0);
+        });
+        pw.box.node.on("text-changed", () => {
+            if (pw.value().indexOf("\n") < 0 && pw.value().indexOf("\r") < 0) return;
+            pw.setValue(pw.value().replace(/[\r\n]/g, ""));
+            this.scheduleOnce(submit, 0);
+        });
+        email.box.node.on("editing-return", () => {
+            this.scheduleOnce(() => pw.focus(), 0);
+        });
+        pw.box.node.on("editing-return", submit);
+
+        const submitBtn = this.sprite(panel, "white", -92, -78, 170, 42,
+            registering ? cc.color(40, 30, 70) : cc.color(20, 70, 40));
+        this.label(submitBtn, registering ? "REGISTER" : "LOG IN", 0, 0, 18, white);
+        submitBtn.on(cc.Node.EventType.TOUCH_END, () => {
+            Sfx.play("click", 0.8);
+            submit();
+        });
+        const closeBtn = this.sprite(panel, "white", 92, -78, 150, 42, cc.color(50, 50, 60));
+        this.label(closeBtn, "CANCEL", 0, 0, 17, white);
+        closeBtn.on(cc.Node.EventType.TOUCH_END, () => {
+            Sfx.play("click", 0.8);
+            this.closePanels();
+        });
+    }
+
+    private authFieldBg(parent: cc.Node, x: number, y: number, w: number, h: number) {
+        const fill = this.sprite(parent, "white", x, y, w, h, cc.color(112, 207, 216));
+        fill.opacity = 245;
+        fill.zIndex = 0;
+    }
+
+    private authEditBox(parent: cc.Node, x: number, y: number, w: number, placeholder: string, password: boolean): {
+        box: cc.EditBox;
+        value: () => string;
+        setValue: (s: string) => void;
+        focus: () => void;
+    } {
+        const n = new cc.Node("authEditBox");
+        n.setPosition(x, y);
+        n.setContentSize(w, 30);
+        n.zIndex = 5;
+        const eb = n.addComponent(cc.EditBox);
+        eb.backgroundImage = null;
+        eb.placeholder = placeholder;
+        eb.maxLength = 60;
+        eb.inputMode = password ? cc.EditBox.InputMode.SINGLE_LINE : cc.EditBox.InputMode.EMAIL_ADDR;
+        eb.fontSize = 18;
+        eb.lineHeight = 30;
+        eb.placeholderFontSize = 16;
+        eb.fontColor = cc.color(8, 16, 36);
+        eb.placeholderFontColor = cc.color(45, 72, 104);
+        if (password) eb.inputFlag = cc.EditBox.InputFlag.PASSWORD;
+        parent.addChild(n);
+
+        const mirrorNode = this.label(parent, "", x - w / 2 + 10, y, 18, cc.color(8, 16, 36), 0);
+        mirrorNode.zIndex = 8;
+        const mirror = mirrorNode.getComponent(cc.Label);
+        mirror.fontSize = 18;
+        mirror.lineHeight = 30;
+        mirrorNode.opacity = 0;
+        let editing = false;
+        const sync = () => {
+            const raw = eb.string || "";
+            mirror.string = password ? raw.replace(/./g, "*") : raw;
+            mirrorNode.opacity = raw && !editing ? 255 : 0;
+        };
+        eb.node.on("text-changed", sync);
+        eb.node.on("editing-did-began", () => {
+            editing = true;
+            mirrorNode.opacity = 0;
+        });
+        // eb.node.on("editing-did-ended", () => {
+        //     editing = false;
+        //     sync();
+        // });
+        eb.node.on("editing-did-ended", () => {
+            this.scheduleOnce(() => {
+                eb.node.active = false;
+                eb.node.active = true;
+            }, 0);
+        });
+
+        return {
+            box: eb,
+            value: () => eb.string || "",
+            setValue: (s: string) => {
+                eb.string = s;
+                sync();
+            },
+            focus: () => eb.focus()
+        };
+    }
+
+    private logoutToStart() {
+        Sfx.play("click", 0.8);
+        this.gatePassed = false;
+        this.clearGate();
+        GameData.setUnlocked(1);
+        GameData.setBestDist(0);
+        Fb.noReloadOnNextAuthChange();
+        Fb.logout();
+        cc.director.loadScene("Start");
     }
 
     private refreshModeButtons() {
@@ -922,37 +1343,24 @@ export default class MenuCtrl extends cc.Component {
             this.label(panel, "Online features are disabled.", 0, 80, 18, white);
             this.label(panel, "Paste the Firebase web config into", 0, 40, 16, dim);
             this.label(panel, "assets/scripts/FbConfig.ts to enable them.", 0, 14, 16, dim);
+        } else if (!Fb.user()) {
+            this.label(panel, "Please log in from the start screen.", 0, 40, 18, white);
         } else {
-            const email = this.editBox(panel, 0, 110, 380, "email", false);
-            const pw = this.editBox(panel, 0, 50, 380, "password (6+ chars)", true);
-            this.accountStatus = this.label(panel, "", 0, -150, 16, orange);
+            this.label(panel, "Logged in as", 0, 98, 16, dim);
+            this.label(panel, Fb.userName(), 0, 66, 26, white);
+            this.label(panel, "Save states sync to this account", 0, 30, 17, orange);
+            this.label(panel, "Unlocked level: " + GameData.getUnlocked(), 0, -2, 16, dim);
+            this.accountStatus = this.label(panel, "", 0, -118, 16, orange);
             const status = (s: string) => {
                 (this.accountStatus.getComponent(cc.Label)).string = s;
             };
-            const act = (fn: (e: string, p: string, cb: (err: string) => void) => void) => {
-                const em = email.string.trim();
-                const pp = pw.string;
-                if (!em || !pp) return status("enter email and password");
-                status("...");
-                fn(em, pp, (err) => {
-                    status(err ? err : "OK!");
-                    this.refreshAccount();
-                });
-            };
-            const lBtn = this.sprite(panel, "white", -95, -20, 170, 44, cc.color(20, 70, 40));
-            this.label(lBtn, "LOG IN", 0, 0, 18, white);
-            lBtn.on(cc.Node.EventType.TOUCH_END, () => act(Fb.login));
-            const rBtn = this.sprite(panel, "white", 95, -20, 170, 44, cc.color(40, 30, 70));
-            this.label(rBtn, "REGISTER", 0, 0, 18, white);
-            rBtn.on(cc.Node.EventType.TOUCH_END, () => act(Fb.register));
-            const oBtn = this.sprite(panel, "white", 0, -80, 170, 40, cc.color(70, 25, 35));
+            const oBtn = this.sprite(panel, "white", 0, -62, 170, 40, cc.color(70, 25, 35));
             this.label(oBtn, "LOG OUT", 0, 0, 16, white);
             oBtn.on(cc.Node.EventType.TOUCH_END, () => {
-                Fb.logout();
-                status("logged out");
-                this.refreshAccount();
+                status("logging out...");
+                this.logoutToStart();
             });
-            this.label(panel, "progress + endless best sync to your account", 0, -120, 14, dim);
+            this.label(panel, "progress + endless best sync to this account", 0, -150, 14, dim);
             this.refreshAccount();
         }
 
@@ -1351,6 +1759,7 @@ export default class MenuCtrl extends cc.Component {
             }
             return;
         }
+        if (!this.shouldShowMainMenu()) return;
         if (e.keyCode === cc.macro.KEY.space && !this.anyPanelOpen()) {
             GameData.currentLevelPath = "";
             GameData.currentLevel = 1;

@@ -42,6 +42,10 @@ export default class GameData {
     // Endless mode best distance, in meters. currentLevel === -1 -> endless.
     private static readonly BEST_KEY = "gfr_best_dist";
 
+    // Transient value used only while reloading the Game scene after an
+    // endless-mode life loss. 0 means "start a fresh run with full health".
+    static carriedHealth = 0;
+
     static getBestDist(): number {
         const v = parseInt(cc.sys.localStorage.getItem(GameData.BEST_KEY) || "0", 10);
         return isNaN(v) ? 0 : v;

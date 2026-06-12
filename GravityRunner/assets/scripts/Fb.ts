@@ -25,6 +25,7 @@ export default class Fb {
     // Any LATER change (login / logout / account switch) hard-reloads the
     // page so no progress leaks between accounts.
     private static baseUid: string = null;
+    private static allowAuthChangeNoReload = false;
 
     // Mid-run save states (6 fixed slots; null = empty). Cloud when logged
     // in, localStorage otherwise.
@@ -82,6 +83,18 @@ export default class Fb {
                     Fb.sdk().auth().onAuthStateChanged((u: any) => {
                         const uid = u ? u.uid : "";
                         if (Fb.baseUid !== null && uid !== Fb.baseUid) {
+                            if (Fb.allowAuthChangeNoReload) {
+                                Fb.allowAuthChangeNoReload = false;
+                                Fb.baseUid = uid;
+                                Fb.authUser = u;
+                                if (u) {
+                                    Fb.loadCloud();
+                                } else {
+                                    Fb.states = [null, null, null, null, null, null];
+                                }
+                                Fb.emit();
+                                return;
+                            }
                             // login / logout / account switch after page load:
                             // wipe guest-visible progress and restart clean.
                             if (!u) {
@@ -132,6 +145,10 @@ export default class Fb {
 
     static logout() {
         if (Fb.ready()) Fb.sdk().auth().signOut();
+    }
+
+    static noReloadOnNextAuthChange() {
+        Fb.allowAuthChangeNoReload = true;
     }
 
     private static errMsg(e: any): string {

@@ -1,7 +1,7 @@
 // Firebase web-app config.
 //
 // HOW TO FILL THIS IN (1 minute):
-//   1. https://console.firebase.google.com -> project (e.g. mario-1145141919810)
+//   1. https://console.firebase.google.com -> project
 //   2. Project settings (gear) -> Your apps -> Web app -> SDK setup -> Config
 //   3. Paste the values below. Leaving apiKey empty disables all online
 //      features gracefully (game falls back to localStorage).
