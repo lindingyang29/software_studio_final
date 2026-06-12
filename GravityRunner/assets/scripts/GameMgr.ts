@@ -1019,11 +1019,19 @@ export default class GameMgr extends cc.Component {
         if (this.rhythmEffectLabel) this.rhythmEffectLabel.node.setPosition(0, split ? -232 : 216);
         if (this.rhythmOpponentEffectLabel) this.rhythmOpponentEffectLabel.node.setPosition(0, split ? 228 : 198);
         if (this.judgeLabel) this.judgeLabel.node.y = split ? -86 : 86;
-        // same compact row in every mode: +-620 only fits a 1320px HUD,
-        // which the 960px design resolution never shows
-        if (this.nameLabel) this.nameLabel.node.setPosition(-472, 286);
-        if (this.crystalLabel) this.crystalLabel.node.setPosition(-210, 286);
-        if (this.deathLabel) this.deathLabel.node.setPosition(80, 286);
+        // all rows must fit the 960px design width (visible x is +-480).
+        // rhythm: song title centered up top, NOTES left / HEALTH right on the
+        // row below (sharing the score line's y). other modes: single top row.
+        const rhythm = this.isRhythmLevel();
+        if (this.nameLabel) {
+            this.nameLabel.node.setPosition(rhythm ? 0 : -472, 286);
+            this.nameLabel.node.anchorX = rhythm ? 0.5 : 0;
+        }
+        if (this.crystalLabel) this.crystalLabel.node.setPosition(rhythm ? -472 : -210, rhythm ? 256 : 286);
+        if (this.deathLabel) {
+            this.deathLabel.node.setPosition(rhythm ? 450 : 80, rhythm ? 256 : 286);
+            this.deathLabel.node.anchorX = rhythm ? 1 : 0;
+        }
         if (this.timeLabel) this.timeLabel.node.setPosition(450, 286);
         if (this.distLabel) this.distLabel.node.setPosition(0, -286);
     }
