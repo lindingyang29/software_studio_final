@@ -29,9 +29,9 @@
   "rhythm": {
     "enabled": true,
     "style": "jump-flip",
-    "source": "幽玄ノ乱.tja",
+    "source": "#U5e7d#U7384#U30ce#U4e71.tja",
     "course": "Hard",
-    "audio": "rhythm_幽玄ノ乱",
+    "audio": "rhythm_#U5e7d#U7384#U30ce#U4e71",
     "baseBpm": 160,
     "pxPerBeat": 220,
     "minNotePx": 0,

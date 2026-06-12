@@ -29,9 +29,9 @@
   "rhythm": {
     "enabled": true,
     "style": "jump-flip",
-    "source": "恋ひ恋ふ縁.tja",
+    "source": "#U604b#U3072#U604b#U3075#U7e01.tja",
     "course": "Hard",
-    "audio": "rhythm_恋ひ恋ふ縁",
+    "audio": "rhythm_#U604b#U3072#U604b#U3075#U7e01",
     "baseBpm": 144,
     "pxPerBeat": 208,
     "minNotePx": 0,

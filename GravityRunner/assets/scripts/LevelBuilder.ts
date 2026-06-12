@@ -88,6 +88,8 @@ export interface RhythmNoteRef {
     y: number;
     voidY?: number;
     gogo?: boolean;
+    attack?: boolean;
+    attackType?: string;
     judged: boolean;
     node?: cc.Node;
 }

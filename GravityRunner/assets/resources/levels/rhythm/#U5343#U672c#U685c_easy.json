@@ -29,9 +29,9 @@
   "rhythm": {
     "enabled": true,
     "style": "jump-flip",
-    "source": "千本桜.tja",
+    "source": "#U5343#U672c#U685c.tja",
     "course": "Easy",
-    "audio": "rhythm_千本桜",
+    "audio": "rhythm_#U5343#U672c#U685c",
     "baseBpm": 154.00015258789062,
     "pxPerBeat": 216,
     "minNotePx": 0,

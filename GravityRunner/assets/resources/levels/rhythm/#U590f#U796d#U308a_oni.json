@@ -29,9 +29,9 @@
   "rhythm": {
     "enabled": true,
     "style": "jump-flip",
-    "source": "夏祭り.tja",
+    "source": "#U590f#U796d#U308a.tja",
     "course": "Oni",
-    "audio": "rhythm_夏祭り",
+    "audio": "rhythm_#U590f#U796d#U308a",
     "baseBpm": 140.384368896484,
     "pxPerBeat": 205,
     "minNotePx": 0,

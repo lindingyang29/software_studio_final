@@ -807,12 +807,12 @@ export default class MenuCtrl extends cc.Component {
         this.label(panel, shown, 0, 160, 18, cyan);
         this.label(panel, "Choose play style", 0, 132, 15, dim);
 
-        const status = this.label(panel, "", 0, -104, 15, orange).getComponent(cc.Label);
-        const mk = (text: string, sub: string, y: number, color: cc.Color, cb: () => void) => {
-            const b = this.sprite(panel, "white", 0, y, 360, 54, color);
-            this.sprite(b, "white", 0, -26, 360, 3, orange);
-            this.label(b, text, 0, 9, 20, white);
-            this.label(b, sub, 0, -13, 13, dim);
+        const status = this.label(panel, "", 0, -124, 15, orange).getComponent(cc.Label);
+        const mk = (text: string, sub: string, x: number, y: number, w: number, color: cc.Color, cb: () => void) => {
+            const b = this.sprite(panel, "white", x, y, w, 54, color);
+            this.sprite(b, "white", 0, -26, w, 3, orange);
+            this.label(b, text, 0, 9, 18, white);
+            this.label(b, sub, 0, -13, 12, dim);
             b.on(cc.Node.EventType.TOUCH_END, (e: cc.Event) => {
                 e.stopPropagation();
                 Sfx.play("click", 0.8);
@@ -820,9 +820,10 @@ export default class MenuCtrl extends cc.Component {
             });
         };
 
-        mk("SOLO PLAY", "normal rhythm mode", 80, cc.color(80, 38, 66), () => this.rhythmLaunch(diff, "solo"));
-        mk("VS AI", "local score battle", 16, cc.color(50, 60, 105), () => this.rhythmLaunch(diff, "ai"));
-        mk("ONLINE ROOM", "create a synced Firebase room", -48, cc.color(20, 70, 40), () => {
+        mk("SOLO", "normal play", -145, 78, 250, cc.color(80, 38, 66), () => this.rhythmLaunch(diff, "solo"));
+        mk("VS AI", "score battle", 145, 78, 250, cc.color(50, 60, 105), () => this.rhythmLaunch(diff, "ai"));
+        mk("FIGHT AI", "attack notes + jams", -145, 10, 250, cc.color(84, 42, 92), () => this.rhythmLaunch(diff, "fight-ai"));
+        const openRoom = (fight: boolean) => {
             if (!Fb.user()) {
                 status.string = "log in first from ACCOUNT";
                 return;
@@ -833,14 +834,16 @@ export default class MenuCtrl extends cc.Component {
                 return;
             }
             const code = this.genRoomCode();
-            Fb.createRoom(code, Number(diff.level) || 6, path, title);
+            Fb.createRoom(code, Number(diff.level) || 6, path, title, fight ? "fight-online" : "online");
             this.myRoom = code;
             this.roomIsHost = true;
             this.roomLaunched = false;
             if (this.rhythmPanel) { this.rhythmPanel.destroy(); this.rhythmPanel = null; }
             this.buildRoomLobby(Number(diff.level) || 6);
             Fb.lobbyListen((rooms, members) => this.onLobby(rooms, members));
-        });
+        };
+        mk("ONLINE", "synced room", 145, 10, 250, cc.color(20, 70, 40), () => openRoom(false));
+        mk("ONLINE FIGHT", "room battle + jams", 0, -58, 360, cc.color(95, 45, 55), () => openRoom(true));
 
         const backBtn = this.sprite(panel, "white", -90, -190, 150, 40, cc.color(35, 45, 95));
         this.label(backBtn, "BACK", 0, 0, 18, white);
@@ -1667,7 +1670,7 @@ export default class MenuCtrl extends cc.Component {
                 GameData.players = 1;
                 const path = String(r.room.path || "");
                 GameData.currentLevelPath = path;
-                GameData.rhythmBattleMode = path ? "online" : "solo";
+                GameData.rhythmBattleMode = path ? String(r.room.rhythmBattleMode || "online") : "solo";
                 GameData.pendingState = null;
                 GameData.currentLevel = path ? (Number(r.room.lv) || 6) : ((r.room.lv === -1) ? -1 : (r.room.lv || 1));
                 Fx.fadeTo("Game", this.node);

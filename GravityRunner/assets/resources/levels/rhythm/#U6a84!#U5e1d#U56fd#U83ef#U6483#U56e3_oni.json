@@ -29,9 +29,9 @@
   "rhythm": {
     "enabled": true,
     "style": "jump-flip",
-    "source": "檄!帝国華撃団.tja",
+    "source": "#U6a84!#U5e1d#U56fd#U83ef#U6483#U56e3.tja",
     "course": "Oni",
-    "audio": "rhythm_檄!帝国華撃団",
+    "audio": "rhythm_#U6a84!#U5e1d#U56fd#U83ef#U6483#U56e3",
     "baseBpm": 142.86769104003906,
     "pxPerBeat": 207,
     "minNotePx": 0,

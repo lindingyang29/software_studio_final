@@ -378,6 +378,10 @@ export default class Player extends cc.Component {
 
         const n = this.node;
         const speedFactor = this.dashT > 0 ? 1.55 : (this.brakeT > 0 ? 0.55 : 1);
+        // IMPORTANT: rhythm judgement is synchronized by music time and fixed
+        // note positions.  Do not apply fight-mode "FAST" as actual player
+        // movement speed here, or the player/AI will drift away from the chart
+        // and many notes become unavoidable MISSes.
         n.x += (this.level.speed * speedFactor + this.pushVx) * dt;
         if (this.pushVx !== 0) {
             this.pushVx *= Math.max(0, 1 - rawDt * 6);
