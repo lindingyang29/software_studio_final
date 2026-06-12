@@ -2009,11 +2009,17 @@ export default class GameMgr extends cc.Component {
         this.unscheduleAllCallbacks();
         Sfx.play("win", 0.9);
         if (this.isRhythmLevel()) Sfx.stopBgm();
-        // win animation: portal sucks the runner in + celebration burst
+        // win animation: portal sucks EVERY living runner in (in 2P the
+        // partner's physics freeze on the state change, so animate them too)
         Fx.confetti(this.world, this.level.goal.x, this.level.goal.y || 0);
-        if (winner && winner.node && winner.node.isValid) {
-            winner.node.stopAllActions();
-            cc.tween(winner.node)
+        for (const p of this.players) {
+            const isWinner = p === winner;
+            if (!isWinner && !p.alive) continue; // died earlier: nothing to animate
+            p.alive = false; // stop the partner's physics as well
+            if (!p.node || !p.node.isValid) continue;
+            p.node.stopAllActions();
+            cc.tween(p.node)
+                .delay(isWinner ? 0 : 0.1)
                 .to(0.55, { x: this.level.goal.x, y: this.level.goal.y || 0, scale: 0, angle: 360 }, { easing: "sineIn" })
                 .start();
         }
