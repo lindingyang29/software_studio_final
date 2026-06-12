@@ -291,7 +291,7 @@ export default class Fb {
         });
     }
 
-    static createRoom(code: string, lv: number, path: string = "", title: string = "", rhythmBattleMode: string = "") {
+    static createRoom(code: string, lv: number, path: string = "", title: string = "", rhythmBattleMode: string = "", custom: any = null) {
         if (!Fb.ready() || !Fb.authUser) return;
         Fb.armServerClock();
         const r = Fb.sdk().database().ref("leaderboard/" + Fb.authUser.uid + "/room");
@@ -304,7 +304,8 @@ export default class Fb {
             lv: lv,
             path: path || "",
             title: title || "",
-            mode: path ? "rhythm" : "level",
+            custom: custom || null,
+            mode: custom ? "custom" : (path ? "rhythm" : "level"),
             rhythmBattleMode: rhythmBattleMode || (path ? "online" : "solo"),
             t: Date.now()
         });

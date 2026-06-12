@@ -13,6 +13,7 @@ const { ccclass } = cc._decorator;
 export default class MenuCtrl extends cc.Component {
 
     private frames: { [k: string]: cc.SpriteFrame } = {};
+    private pixelFont: cc.BitmapFont = null;
     private bgNode: cc.Node = null;
     private modeButtons: cc.Node[] = [];
     private hintLabel: cc.Node = null;
@@ -32,6 +33,8 @@ export default class MenuCtrl extends cc.Component {
     private lastMembers: { uid: string; name: string; code: string }[] = [];
     private roomMembersBox: cc.Node = null;
     private roomStatus: cc.Label = null;
+    private customRoomPanel: cc.Node = null;
+    private readonly editorMapSlotsKey = "gfr_editor_map_slots";
     private rhythmPanel: cc.Node = null;
     private keyBindPanel: cc.Node = null;
     private keyBindKind = "";
@@ -42,6 +45,8 @@ export default class MenuCtrl extends cc.Component {
     private gatePassed = false;
     private readonly gateKey = "gfr_auth_gate";
     private authOverlay: HTMLElement = null;
+    private authInputs: HTMLInputElement[] = [];
+    private roomCodeInput: HTMLInputElement = null;
     private rhythmSongs: any[] = [
         {
             id: "summer",
@@ -98,12 +103,18 @@ export default class MenuCtrl extends cc.Component {
                 return;
             }
             for (const a of assets) this.frames[a.name] = a;
-            cc.resources.load("rhythm_catalog", cc.JsonAsset, (catErr, cat: cc.JsonAsset) => {
-                if (!catErr && cat && cat.json && Array.isArray((cat.json as any).songs)) {
-                    this.rhythmSongs = (cat.json as any).songs;
-                    this.rhythmSongPage = 0;
+            cc.resources.load("textures/pixelText", cc.BitmapFont, (fontErr, font: cc.BitmapFont) => {
+                if (!fontErr && font) {
+                    this.pixelFont = font;
+                    Fx.setPixelFont(font);
                 }
-                this.buildUi();
+                cc.resources.load("rhythm_catalog", cc.JsonAsset, (catErr, cat: cc.JsonAsset) => {
+                    if (!catErr && cat && cat.json && Array.isArray((cat.json as any).songs)) {
+                        this.rhythmSongs = (cat.json as any).songs;
+                        this.rhythmSongPage = 0;
+                    }
+                    this.buildUi();
+                });
             });
         });
         cc.director.preloadScene(this.isStartScene() ? "Menu" : "Game");
@@ -114,6 +125,8 @@ export default class MenuCtrl extends cc.Component {
         cc.systemEvent.off(cc.SystemEvent.EventType.KEY_DOWN, this.onKeyDown, this);
         Fb.onChanged = null;
         this.removeAuthOverlay();
+        this.removeAuthInputs();
+        this.removeRoomCodeInput();
     }
 
     private sprite(parent: cc.Node, frame: string, x: number, y: number, w: number, h: number, color?: cc.Color): cc.Node {
@@ -135,6 +148,7 @@ export default class MenuCtrl extends cc.Component {
         n.color = color;
         const lb = n.addComponent(cc.Label);
         lb.string = text;
+        if (this.pixelFont) lb.font = this.pixelFont;
         lb.fontSize = size;
         lb.lineHeight = size + 6;
         parent.addChild(n);
@@ -427,14 +441,12 @@ export default class MenuCtrl extends cc.Component {
             return;
         }
 
-        const lBtn = this.sprite(this.node, "white", -96, -132, 170, 42, cc.color(20, 70, 40));
-        this.label(lBtn, "LOG IN", 0, 0, 18, white);
+        const lBtn = this.sprite(this.node, "Login", -112, -132, 190, 60);
         lBtn.on(cc.Node.EventType.TOUCH_END, () => {
             Sfx.play("click", 0.8);
             this.openAuthOverlay("login");
         });
-        const rBtn = this.sprite(this.node, "white", 96, -132, 170, 42, cc.color(40, 30, 70));
-        this.label(rBtn, "REGISTER", 0, 0, 18, white);
+        const rBtn = this.sprite(this.node, "register", 112, -132, 202, 60);
         rBtn.on(cc.Node.EventType.TOUCH_END, () => {
             Sfx.play("click", 0.8);
             this.openAuthOverlay("register");
@@ -442,6 +454,8 @@ export default class MenuCtrl extends cc.Component {
     }
 
     private openAuthOverlay(mode: string) {
+        this.buildAuthForm(mode);
+        return;
         if (!cc.sys.isBrowser || typeof document === "undefined") {
             this.buildAuthForm(mode);
             return;
@@ -602,6 +616,105 @@ export default class MenuCtrl extends cc.Component {
         this.authOverlay = null;
     }
 
+    private removeAuthInputs() {
+        for (let i = 0; i < this.authInputs.length; i++) {
+            const input = this.authInputs[i];
+            if (input && input.parentNode) input.parentNode.removeChild(input);
+        }
+        this.authInputs = [];
+    }
+
+    private placeDomInput(input: HTMLInputElement, x: number, y: number, w: number, h: number) {
+        const canvas = cc.game.canvas as HTMLCanvasElement;
+        if (!canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        const sx = rect.width / cc.winSize.width;
+        const sy = rect.height / cc.winSize.height;
+        const left = rect.left + rect.width / 2 + (x - w / 2) * sx;
+        const yOffset = input.getAttribute("data-gfr-auth") === "1" ? -17 : 0;
+        const top = rect.top + rect.height / 2 - (y + h / 2 + yOffset) * sy;
+        input.style.left = Math.round(left) + "px";
+        input.style.top = Math.round(top) + "px";
+        input.style.width = Math.round(w * sx) + "px";
+        input.style.height = Math.round(h * sy) + "px";
+    }
+
+    private createAuthInput(x: number, y: number, w: number, h: number, placeholder: string, type: string): HTMLInputElement {
+        if (!cc.sys.isBrowser || typeof document === "undefined") return null;
+        const input = document.createElement("input");
+        input.type = type;
+        input.setAttribute("data-gfr-auth", "1");
+        input.placeholder = placeholder;
+        input.maxLength = 60;
+        input.style.cssText = [
+            "position:fixed",
+            "box-sizing:border-box",
+            "padding:0 16px",
+            "background:transparent",
+            "border:0",
+            "outline:none",
+            "color:#081024",
+            "font-family:monospace",
+            "font-size:20px",
+            "line-height:" + h + "px",
+            "z-index:9998"
+        ].join(";");
+        document.body.appendChild(input);
+        this.authInputs.push(input);
+        this.placeDomInput(input, x, y, w, h);
+        window.setTimeout(() => this.placeDomInput(input, x, y, w, h), 0);
+        return input;
+    }
+
+    private removeRoomCodeInput() {
+        if (this.roomCodeInput && this.roomCodeInput.parentNode) {
+            this.roomCodeInput.parentNode.removeChild(this.roomCodeInput);
+        }
+        this.roomCodeInput = null;
+    }
+
+    private placeRoomCodeInput(input: HTMLInputElement) {
+        this.placeDomInput(input, -40, -40, 220, 44);
+    }
+
+    private createRoomCodeInput(status?: cc.Label) {
+        if (!cc.sys.isBrowser || typeof document === "undefined") return;
+        this.removeRoomCodeInput();
+        const input = document.createElement("input");
+        input.type = "text";
+        input.placeholder = "room code";
+        input.maxLength = 4;
+        input.autocapitalize = "characters";
+        input.style.cssText = [
+            "position:fixed",
+            "box-sizing:border-box",
+            "padding:0 18px",
+            "background:#253060",
+            "border:0",
+            "outline:2px solid rgba(127,247,255,0.18)",
+            "color:#ebf0ff",
+            "font-family:monospace",
+            "font-size:20px",
+            "text-transform:uppercase",
+            "z-index:9998"
+        ].join(";");
+        input.addEventListener("input", () => {
+            input.value = input.value.toUpperCase().slice(0, 4);
+        });
+        input.addEventListener("keydown", (e: KeyboardEvent) => {
+            if (e.key === "Enter") {
+                e.preventDefault();
+                this.joinRoomCode(input.value, status);
+            }
+        });
+        document.body.appendChild(input);
+        this.roomCodeInput = input;
+        this.placeRoomCodeInput(input);
+        window.setTimeout(() => {
+            if (this.roomCodeInput) this.placeRoomCodeInput(this.roomCodeInput);
+        }, 0);
+    }
+
     private buildAuthForm(mode: string) {
         this.closePanels();
         const white = cc.color(235, 240, 255);
@@ -619,10 +732,12 @@ export default class MenuCtrl extends cc.Component {
         this.label(panel, registering ? "Create a Firebase account." : "Load your Firebase progress.", 0, 92, 15, dim);
         this.label(panel, "EMAIL", -188, 66, 13, cc.color(150, 165, 220), 0);
         this.authFieldBg(panel, 0, 40, 384, 34);
-        const email = this.authEditBox(panel, 0, 40, 360, "email", false);
+        const emailDom = this.createAuthInput(0, 40, 384, 34, "email", "email");
+        const email = emailDom ? null : this.authEditBox(panel, 0, 40, 360, "email", false);
         this.label(panel, "PASSWORD", -188, 8, 13, cc.color(150, 165, 220), 0);
         this.authFieldBg(panel, 0, -18, 384, 34);
-        const pw = this.authEditBox(panel, 0, -18, 360, "password (6+ chars)", true);
+        const pwDom = this.createAuthInput(0, -18, 384, 34, "password", "text");
+        const pw = pwDom ? null : this.authEditBox(panel, 0, -18, 360, "password", true);
         this.accountStatus = this.label(panel, "", 0, -126, 15, orange);
         const status = (s: string) => {
             if (this.accountStatus && this.accountStatus.isValid) {
@@ -630,8 +745,8 @@ export default class MenuCtrl extends cc.Component {
             }
         };
         const submit = () => {
-            const em = email.value().trim();
-            const pp = pw.value();
+            const em = (emailDom ? emailDom.value : email.value()).trim();
+            const pp = pwDom ? pwDom.value : pw.value();
             if (!em || !pp) return status("enter email and password");
             status(registering ? "creating account..." : "logging in...");
             if (registering) {
@@ -647,25 +762,45 @@ export default class MenuCtrl extends cc.Component {
                 this.gatePassed = true;
                 this.saveGate();
                 status(registering ? "saved to Firebase. loading..." : "loading your progress...");
-                this.scheduleOnce(() => this.rebuildUi(), 0.15);
+                if (this.isStartScene()) {
+                    this.scheduleOnce(() => Fx.fadeTo("Menu", this.node), 0.15);
+                } else {
+                    this.scheduleOnce(() => this.rebuildUi(), 0.15);
+                }
             });
         };
-        email.box.returnType = cc.EditBox.KeyboardReturnType.NEXT;
-        pw.box.returnType = cc.EditBox.KeyboardReturnType.DONE;
-        email.box.node.on("text-changed", () => {
-            if (email.value().indexOf("\n") < 0 && email.value().indexOf("\r") < 0) return;
-            email.setValue(email.value().replace(/[\r\n]/g, ""));
-            this.scheduleOnce(() => pw.focus(), 0);
-        });
-        pw.box.node.on("text-changed", () => {
-            if (pw.value().indexOf("\n") < 0 && pw.value().indexOf("\r") < 0) return;
-            pw.setValue(pw.value().replace(/[\r\n]/g, ""));
-            this.scheduleOnce(submit, 0);
-        });
-        email.box.node.on("editing-return", () => {
-            this.scheduleOnce(() => pw.focus(), 0);
-        });
-        pw.box.node.on("editing-return", submit);
+        if (emailDom && pwDom) {
+            emailDom.addEventListener("keydown", (e: KeyboardEvent) => {
+                if (e.key === "Enter") {
+                    e.preventDefault();
+                    pwDom.focus();
+                }
+            });
+            pwDom.addEventListener("keydown", (e: KeyboardEvent) => {
+                if (e.key === "Enter") {
+                    e.preventDefault();
+                    submit();
+                }
+            });
+            window.setTimeout(() => emailDom.focus(), 50);
+        } else {
+            email.box.returnType = cc.EditBox.KeyboardReturnType.NEXT;
+            pw.box.returnType = cc.EditBox.KeyboardReturnType.DONE;
+            email.box.node.on("text-changed", () => {
+                if (email.value().indexOf("\n") < 0 && email.value().indexOf("\r") < 0) return;
+                email.setValue(email.value().replace(/[\r\n]/g, ""));
+                this.scheduleOnce(() => pw.focus(), 0);
+            });
+            pw.box.node.on("text-changed", () => {
+                if (pw.value().indexOf("\n") < 0 && pw.value().indexOf("\r") < 0) return;
+                pw.setValue(pw.value().replace(/[\r\n]/g, ""));
+                this.scheduleOnce(submit, 0);
+            });
+            email.box.node.on("editing-return", () => {
+                this.scheduleOnce(() => pw.focus(), 0);
+            });
+            pw.box.node.on("editing-return", submit);
+        }
 
         const submitBtn = this.sprite(panel, "white", -92, -78, 170, 42,
             registering ? cc.color(40, 30, 70) : cc.color(20, 70, 40));
@@ -708,43 +843,13 @@ export default class MenuCtrl extends cc.Component {
         eb.placeholderFontSize = 16;
         eb.fontColor = cc.color(8, 16, 36);
         eb.placeholderFontColor = cc.color(45, 72, 104);
-        if (password) eb.inputFlag = cc.EditBox.InputFlag.PASSWORD;
         parent.addChild(n);
-
-        const mirrorNode = this.label(parent, "", x - w / 2 + 10, y, 18, cc.color(8, 16, 36), 0);
-        mirrorNode.zIndex = 8;
-        const mirror = mirrorNode.getComponent(cc.Label);
-        mirror.fontSize = 18;
-        mirror.lineHeight = 30;
-        mirrorNode.opacity = 0;
-        let editing = false;
-        const sync = () => {
-            const raw = eb.string || "";
-            mirror.string = password ? raw.replace(/./g, "*") : raw;
-            mirrorNode.opacity = raw && !editing ? 255 : 0;
-        };
-        eb.node.on("text-changed", sync);
-        eb.node.on("editing-did-began", () => {
-            editing = true;
-            mirrorNode.opacity = 0;
-        });
-        // eb.node.on("editing-did-ended", () => {
-        //     editing = false;
-        //     sync();
-        // });
-        eb.node.on("editing-did-ended", () => {
-            this.scheduleOnce(() => {
-                eb.node.active = false;
-                eb.node.active = true;
-            }, 0);
-        });
 
         return {
             box: eb,
             value: () => eb.string || "",
             setValue: (s: string) => {
                 eb.string = s;
-                sync();
             },
             focus: () => eb.focus()
         };
@@ -1095,11 +1200,17 @@ export default class MenuCtrl extends cc.Component {
 
     private closePanels() {
         if (this.settingsPanel) { this.settingsPanel.destroy(); this.settingsPanel = null; }
-        if (this.accountPanel) { this.accountPanel.destroy(); this.accountPanel = null; }
+        if (this.accountPanel) {
+            this.removeAuthInputs();
+            this.accountPanel.destroy();
+            this.accountPanel = null;
+        }
         if (this.boardPanel) { this.boardPanel.destroy(); this.boardPanel = null; }
         if (this.savesPanel) { this.savesPanel.destroy(); this.savesPanel = null; }
         if (this.helpPanel) { this.helpPanel.destroy(); this.helpPanel = null; }
+        if (this.customRoomPanel) { this.customRoomPanel.destroy(); this.customRoomPanel = null; }
         if (this.roomPanel) {
+            this.removeRoomCodeInput();
             this.roomPanel.destroy();
             this.roomPanel = null;
             Fb.lobbyOff();
@@ -1119,7 +1230,7 @@ export default class MenuCtrl extends cc.Component {
     private anyPanelOpen(): boolean {
         return !!(this.settingsPanel || this.accountPanel || this.boardPanel
             || this.savesPanel || this.helpPanel || this.roomPanel
-            || this.rhythmPanel || this.keyBindPanel);
+            || this.customRoomPanel || this.rhythmPanel || this.keyBindPanel);
     }
 
     private toggleSettings() {
@@ -1396,6 +1507,7 @@ export default class MenuCtrl extends cc.Component {
             ln.color = color;
             const lb = ln.addComponent(cc.Label);
             lb.string = "";
+            if (this.pixelFont) lb.font = this.pixelFont;
             lb.fontSize = 18;
             lb.lineHeight = h;
             lb.horizontalAlign = cc.Label.HorizontalAlign.LEFT;
@@ -1595,35 +1707,131 @@ export default class MenuCtrl extends cc.Component {
         }
 
         this.label(panel, "— or —", 0, 60, 14, dim);
+        const customBtn = this.sprite(panel, "white", 0, 72, 190, 38, cc.color(58, 26, 84));
+        this.label(customBtn, "CUSTOM MAP", 0, 0, 16, white);
+        customBtn.on(cc.Node.EventType.TOUCH_END, (e: cc.Event) => {
+            e.stopPropagation();
+            Sfx.play("click", 0.8);
+            this.openCustomRoomMapPanel();
+        });
+
         this.label(panel, "JOIN A ROOM:", -220, 10, 16, dim, 0);
-        const codeEb = this.editBox(panel, -40, -40, 220, "room code", false);
+        const codeBtn = this.sprite(panel, "white", -40, -40, 220, 44, cc.color(24, 34, 76));
         const jBtn = this.sprite(panel, "white", 150, -40, 130, 44, cc.color(20, 70, 40));
         this.label(jBtn, "JOIN", 0, 0, 17, white);
         const status = this.label(panel, "", 0, -110, 15, cyan);
+        const statusLabel = status.getComponent(cc.Label);
+        this.createRoomCodeInput(statusLabel);
+        codeBtn.on(cc.Node.EventType.TOUCH_END, (e: cc.Event) => {
+            e.stopPropagation();
+            if (this.roomCodeInput) this.roomCodeInput.focus();
+        });
         jBtn.on(cc.Node.EventType.TOUCH_END, (e: cc.Event) => {
             e.stopPropagation();
             Sfx.play("click", 0.8);
-            const code = codeEb.string.trim().toUpperCase();
-            if (!code) {
-                (status.getComponent(cc.Label)).string = "enter a room code";
-                return;
+            this.joinRoomCode(this.roomCodeInput ? this.roomCodeInput.value : "", statusLabel);
+        });
+    }
+
+    private joinRoomCode(code: string, status?: cc.Label): boolean {
+        code = String(code || "").trim().toUpperCase();
+        if (!code) {
+            if (status) status.string = "enter a room code";
+            return false;
+        }
+        let found = false;
+        for (const r of this.lastRooms) {
+            if (r.room && r.room.code === code) { found = true; break; }
+        }
+        if (!found) {
+            if (status) status.string = "room " + code + " not found";
+            return false;
+        }
+        Fb.joinRoom(code);
+        this.myRoom = code;
+        this.roomIsHost = false;
+        this.removeRoomCodeInput();
+        this.buildRoomLobby(0);
+        return true;
+    }
+
+    private loadEditorMapSlots(): any[] {
+        let slots: any[] = [];
+        try {
+            const raw = cc.sys.localStorage.getItem(this.editorMapSlotsKey);
+            slots = raw ? JSON.parse(raw) : [];
+        } catch (e) {
+            slots = [];
+        }
+        while (slots.length < 3) slots.push(null);
+        return slots.slice(0, 3);
+    }
+
+    private editorMapSlotTitle(slot: any, idx: number): string {
+        if (!slot || !slot.data) return "SLOT " + (idx + 1) + "   EMPTY";
+        const d = new Date(slot.t || 0);
+        const pad = (v: number) => (v < 10 ? "0" + v : "" + v);
+        return "SLOT " + (idx + 1) + "   " + (slot.data.name || "MY LEVEL")
+            + "   " + (d.getMonth() + 1) + "/" + d.getDate()
+            + " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
+    }
+
+    private openCustomRoomMapPanel() {
+        if (this.customRoomPanel) {
+            this.customRoomPanel.destroy();
+            this.customRoomPanel = null;
+        }
+        const white = cc.color(235, 240, 255);
+        const orange = cc.color(255, 181, 74);
+        const dim = cc.color(110, 120, 150);
+        const slots = this.loadEditorMapSlots();
+
+        const panel = this.sprite(this.node, "white", 0, 0, 560, 320, cc.color(10, 12, 26));
+        panel.opacity = 250;
+        panel.zIndex = 80;
+        panel.on(cc.Node.EventType.TOUCH_START, (e: cc.Event) => e.stopPropagation());
+        this.customRoomPanel = panel;
+
+        this.label(panel, "CUSTOM ROOM MAP", 0, 126, 24, orange);
+        this.label(panel, "choose an editor save slot for this room", 0, 96, 13, dim);
+
+        for (let i = 0; i < 3; i++) {
+            const slot = slots[i];
+            const y = 48 - i * 50;
+            const row = this.sprite(panel, "white", 0, y, 500, 42, slot ? cc.color(22, 30, 60) : cc.color(28, 28, 34));
+            this.label(row, this.editorMapSlotTitle(slot, i), -236, 0, 14, slot ? white : dim, 0);
+            if (!slot || !slot.data) continue;
+            const idx = i;
+            row.on(cc.Node.EventType.TOUCH_END, (e: cc.Event) => {
+                e.stopPropagation();
+                Sfx.play("power", 0.8);
+                const code = this.genRoomCode();
+                const data = JSON.parse(JSON.stringify(this.loadEditorMapSlots()[idx].data));
+                Fb.createRoom(code, 0, "", "CUSTOM MAP " + (idx + 1), "", data);
+                this.myRoom = code;
+                this.roomIsHost = true;
+                if (this.customRoomPanel) {
+                    this.customRoomPanel.destroy();
+                    this.customRoomPanel = null;
+                }
+                this.buildRoomLobby(0);
+            });
+        }
+
+        const closeBtn = this.sprite(panel, "white", 0, -128, 130, 36, cc.color(50, 50, 60));
+        this.label(closeBtn, "CLOSE", 0, 0, 16, white);
+        closeBtn.on(cc.Node.EventType.TOUCH_END, (e: cc.Event) => {
+            e.stopPropagation();
+            Sfx.play("click", 0.7);
+            if (this.customRoomPanel) {
+                this.customRoomPanel.destroy();
+                this.customRoomPanel = null;
             }
-            let found = false;
-            for (const r of this.lastRooms) {
-                if (r.room && r.room.code === code) { found = true; break; }
-            }
-            if (!found) {
-                (status.getComponent(cc.Label)).string = "room " + code + " not found";
-                return;
-            }
-            Fb.joinRoom(code);
-            this.myRoom = code;
-            this.roomIsHost = false;
-            this.buildRoomLobby(0);
         });
     }
 
     private buildRoomLobby(lv: number) {
+        this.removeRoomCodeInput();
         if (this.roomPanel) { this.roomPanel.destroy(); this.roomPanel = null; }
         const white = cc.color(235, 240, 255);
         const cyan = cc.color(127, 247, 255);
@@ -1637,7 +1845,7 @@ export default class MenuCtrl extends cc.Component {
         this.label(panel, this.roomIsHost
             ? "you are the HOST — share the code, then press START"
             : "waiting for the host to start...", 0, 176, 15, dim);
-        this.label(panel, roomTitle ? ("RHYTHM  " + roomTitle) : "synced race room", 0, 150, 13, cyan);
+        this.label(panel, roomTitle ? roomTitle : "synced race room", 0, 150, 13, cyan);
         this.roomStatus = this.label(panel, "", 0, 126, 14, cyan).getComponent(cc.Label);
 
         this.label(panel, "PLAYERS", 0, 96, 16, cc.color(255, 181, 74));
@@ -1689,11 +1897,20 @@ export default class MenuCtrl extends cc.Component {
                 GameData.roomCode = this.myRoom;
                 GameData.roomT0 = t0;
                 GameData.players = 1;
+                const custom = r.room.custom || null;
                 const path = String(r.room.path || "");
-                GameData.currentLevelPath = path;
-                GameData.rhythmBattleMode = path ? String(r.room.rhythmBattleMode || "online") : "solo";
+                if (custom && custom.goal) {
+                    // host shared an editor-made map: everyone plays that copy
+                    cc.sys.localStorage.setItem(GameData.CUSTOM_KEY, JSON.stringify(custom));
+                    GameData.currentLevelPath = "";
+                    GameData.currentLevel = 0;
+                    GameData.rhythmBattleMode = "solo";
+                } else {
+                    GameData.currentLevelPath = path;
+                    GameData.rhythmBattleMode = path ? String(r.room.rhythmBattleMode || "online") : "solo";
+                    GameData.currentLevel = path ? (Number(r.room.lv) || 6) : ((r.room.lv === -1) ? -1 : (r.room.lv || 1));
+                }
                 GameData.pendingState = null;
-                GameData.currentLevel = path ? (Number(r.room.lv) || 6) : ((r.room.lv === -1) ? -1 : (r.room.lv || 1));
                 Fx.fadeTo("Game", this.node);
             }
             return;

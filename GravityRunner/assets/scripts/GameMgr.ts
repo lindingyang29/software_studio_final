@@ -30,6 +30,7 @@ export default class GameMgr extends cc.Component {
     private players: Player[] = [];
     private level: LevelData = null;
     private frames: { [k: string]: cc.SpriteFrame } = {};
+    private pixelFont: cc.BitmapFont = null;
 
     private state: GameState = "loading";
     private time = 0;
@@ -183,7 +184,13 @@ export default class GameMgr extends cc.Component {
                 return;
             }
             for (const a of assets) this.frames[a.name] = a;
-            this.onTexturesReady();
+            cc.resources.load("textures/pixelText", cc.BitmapFont, (fontErr, font: cc.BitmapFont) => {
+                if (!fontErr && font) {
+                    this.pixelFont = font;
+                    Fx.setPixelFont(font);
+                }
+                this.onTexturesReady();
+            });
         });
     }
 
@@ -1085,6 +1092,7 @@ export default class GameMgr extends cc.Component {
                 ln.setPosition(0, 34);
                 ln.color = cc.color(255, 181, 74);
                 const lb = ln.addComponent(cc.Label);
+                if (this.pixelFont) lb.font = this.pixelFont;
                 lb.string = d.n || "ghost";
                 lb.fontSize = 12;
                 lb.lineHeight = 14;
@@ -1205,6 +1213,8 @@ export default class GameMgr extends cc.Component {
         this.spawnPlayersAndCamera(1e15);
         this.applyRotationForX(this.level.start.x, true);
         this.nameLabel.string = "ENDLESS MODE" + (GameData.players === 2 ? "   [2P]" : "");
+        this.distLabel.node.active = true;
+        this.distLabel.string = "0m   BEST " + GameData.getBestDist() + "m";
         this.refreshHud();
         this.state = "ready";
         this.setMsg("PRESS SPACE TO RUN",
@@ -1281,6 +1291,7 @@ export default class GameMgr extends cc.Component {
         n.anchorX = anchorX;
         n.color = color;
         const lb = n.addComponent(cc.Label);
+        if (this.pixelFont) lb.font = this.pixelFont;
         lb.fontSize = size;
         lb.lineHeight = size + 6;
         lb.string = "";
@@ -1897,6 +1908,7 @@ export default class GameMgr extends cc.Component {
         name.setPosition(0, 34);
         name.color = cc.color(255, 230, 150);
         const lb = name.addComponent(cc.Label);
+        if (this.pixelFont) lb.font = this.pixelFont;
         lb.string = "AI";
         lb.fontSize = 12;
         lb.lineHeight = 14;
@@ -2491,10 +2503,21 @@ export default class GameMgr extends cc.Component {
         mkSprite(panel, 540, 7, 0, 167, accent, 255);
         mkSprite(panel, 540, 3, 0, -170, accent, 160);
 
-        const titleLb = this.makeLabel(panel, 0, 118, 38, accent);
-        titleLb.string = title;
+        const titleFrame = title === "LEVEL CLEAR!" ? "LevelClear" : title === "GAME OVER" ? "GameOver" : "";
+        if (titleFrame && this.frames[titleFrame]) {
+            const titleNode = new cc.Node(titleFrame);
+            const titleSp = titleNode.addComponent(cc.Sprite);
+            titleSp.spriteFrame = this.frames[titleFrame];
+            titleSp.sizeMode = cc.Sprite.SizeMode.CUSTOM;
+            titleNode.setContentSize(430, 286);
+            titleNode.setPosition(0, 138);
+            panel.addChild(titleNode);
+        } else {
+            const titleLb = this.makeLabel(panel, 0, 118, 38, accent);
+            titleLb.string = title;
+        }
         for (let i = 0; i < lines.length; i++) {
-            const lb = this.makeLabel(panel, 0, 52 - i * 36, 19, cc.color(235, 240, 255));
+            const lb = this.makeLabel(panel, 0, 32 - i * 36, 19, cc.color(235, 240, 255));
             lb.string = lines[i];
         }
 
@@ -2841,6 +2864,7 @@ export default class GameMgr extends cc.Component {
             this.level.speed = this.endlessBaseSpeed() + Math.min(240, this.distPx / 80);
             const lead = this.anyAlive();
             if (lead && lead.node.x > this.distPx) this.distPx = lead.node.x;
+            this.distLabel.node.active = true;
             this.distLabel.string = Math.floor(this.distPx / 10) + "m   BEST " + GameData.getBestDist() + "m";
             const camX = this.cameraNode.x;
             while (this.gen.getX() < camX + 1700) {
