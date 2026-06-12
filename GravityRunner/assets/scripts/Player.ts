@@ -1,4 +1,5 @@
 import { LevelData, RectDef, FLOOR_Y, CEIL_Y } from "./LevelBuilder";
+import GameData from "./GameData";
 import Sfx from "./Sfx";
 import Fx from "./Fx";
 import GameMgr from "./GameMgr";
@@ -582,8 +583,9 @@ export default class Player extends cc.Component {
     private die() {
         if (!this.alive) return;
         this.alive = false;
-        Fx.death(this.node.parent, this.node.x, this.node.y,
-            this.index === 0 ? cc.color(56, 224, 255) : cc.color(255, 170, 60));
+        const skin = GameData.skinOf(this.index === 0
+            ? GameData.settings.skin1 : GameData.settings.skin2);
+        Fx.death(this.node.parent, this.node.x, this.node.y, skin.color);
         this.node.stopAllActions();
         cc.tween(this.node)
             .parallel(

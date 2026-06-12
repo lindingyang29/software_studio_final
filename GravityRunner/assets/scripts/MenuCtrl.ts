@@ -1213,8 +1213,8 @@ export default class MenuCtrl extends cc.Component {
 
         const s = GameData.settings;
         const pct = (v: number) => Math.round(v * 100) + "%";
-        let rowY = 188;
-        const nextY = () => { const r = rowY; rowY -= 42; return r; };
+        let rowY = 200;
+        const nextY = () => { const r = rowY; rowY -= 40; return r; };
 
         this.sliderRow(panel, nextY(), "SFX VOLUME",
             () => s.sfx, (v) => { s.sfx = v; }, 0, 1, 0.05, pct,
@@ -1234,6 +1234,12 @@ export default class MenuCtrl extends cc.Component {
         this.sliderRow(panel, nextY(), "ONLINE CONTACT",
             () => s.onlineCollide ? 1 : 0, (v) => { s.onlineCollide = Math.round(v); }, 0, 1, 1,
             (v) => Math.round(v) === 1 ? "COLLIDE" : "GHOST");
+        this.sliderRow(panel, nextY(), "P1 SKIN",
+            () => s.skin1 || 0, (v) => { s.skin1 = Math.round(v); }, 0, GameData.SKINS.length - 1, 1,
+            (v) => GameData.skinOf(v).name);
+        this.sliderRow(panel, nextY(), "P2 SKIN",
+            () => (typeof s.skin2 === "number" ? s.skin2 : 1), (v) => { s.skin2 = Math.round(v); }, 0, GameData.SKINS.length - 1, 1,
+            (v) => GameData.skinOf(v).name);
         const gaps = this.rhythmGapValues;
         this.sliderRow(panel, nextY(), "RHYTHM TRACK GAP",
             () => this.closestIndex(gaps, s.rhythmGap),
@@ -1264,7 +1270,7 @@ export default class MenuCtrl extends cc.Component {
             });
         }
 
-        const closeBtn = this.sprite(panel, "white", 0, -278, 160, 36, cc.color(70, 30, 50));
+        const closeBtn = this.sprite(panel, "white", 0, -284, 160, 34, cc.color(70, 30, 50));
         this.label(closeBtn, "CLOSE", 0, 0, 18, white);
         closeBtn.on(cc.Node.EventType.TOUCH_END, () => {
             Sfx.play("click", 0.8);

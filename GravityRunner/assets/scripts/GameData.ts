@@ -11,10 +11,25 @@ export interface Settings {
     rhythmFlipKeys: string; // comma-separated key names, e.g. d,k
     rhythmSpeedScale: number; // rhythm scroll / flow multiplier, 0.1..2.0
     onlineCollide: number;    // 0 = pass-through ghosts, 1 = elastic collision
+    skin1: number;            // P1 skin index, see GameData.SKINS
+    skin2: number;            // P2 skin index
 }
 
 export default class GameData {
     static readonly MAX_LEVEL = 5;
+
+    // Player skins: texture frame name + accent color (death burst etc).
+    static readonly SKINS = [
+        { name: "CYAN", frame: "player", color: cc.color(56, 224, 255) },
+        { name: "ORANGE", frame: "player2", color: cc.color(255, 170, 60) },
+        { name: "GREEN", frame: "player_green", color: cc.color(90, 255, 120) },
+        { name: "PURPLE", frame: "player_purple", color: cc.color(190, 120, 255) }
+    ];
+
+    static skinOf(index: number) {
+        const i = Math.max(0, Math.min(GameData.SKINS.length - 1, Math.round(index) || 0));
+        return GameData.SKINS[i];
+    }
 
     // Which level the Game scene should load. 0 = the player-made custom
     // level stored in localStorage under CUSTOM_KEY (see EditorCtrl).
@@ -91,7 +106,7 @@ export default class GameData {
     }
 
     private static loadSettings(): Settings {
-        const def: Settings = { sfx: 1, bgm: 0.6, speed: 1, scheme: 0, brightness: 1, rhythmGap: 280, rhythmJumpKeys: "f,j", rhythmFlipKeys: "d,k", rhythmSpeedScale: 1, onlineCollide: 0 };
+        const def: Settings = { sfx: 1, bgm: 0.6, speed: 1, scheme: 0, brightness: 1, rhythmGap: 280, rhythmJumpKeys: "f,j", rhythmFlipKeys: "d,k", rhythmSpeedScale: 1, onlineCollide: 0, skin1: 0, skin2: 1 };
         try {
             const raw = cc.sys.localStorage.getItem(GameData.SETTINGS_KEY);
             if (raw) {

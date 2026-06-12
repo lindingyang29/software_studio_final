@@ -986,7 +986,9 @@ export default class GameMgr extends cc.Component {
             if (!g) {
                 const n = new cc.Node("ghost");
                 const sp = n.addComponent(cc.Sprite);
-                sp.spriteFrame = this.frames["player2"] || this.frames["player"];
+                // show the remote player's chosen skin
+                sp.spriteFrame = this.frames[GameData.skinOf(d.sk || 0).frame]
+                    || this.frames["player2"] || this.frames["player"];
                 sp.sizeMode = cc.Sprite.SizeMode.CUSTOM;
                 n.setContentSize(36, 36);
                 n.opacity = 205;
@@ -1063,7 +1065,8 @@ export default class GameMgr extends cc.Component {
         for (let i = 0; i < count; i++) {
             const pNode = new cc.Node("Player" + (i + 1));
             const sp = pNode.addComponent(cc.Sprite);
-            sp.spriteFrame = this.frames[i === 0 ? "player" : "player2"];
+            const skin = GameData.skinOf(i === 0 ? GameData.settings.skin1 : GameData.settings.skin2);
+            sp.spriteFrame = this.frames[skin.frame] || this.frames["player"];
             sp.sizeMode = cc.Sprite.SizeMode.CUSTOM;
             pNode.setContentSize(36, 36);
             this.world.addChild(pNode, 5);
@@ -2655,6 +2658,7 @@ export default class GameMgr extends cc.Component {
                             y: Math.round(me.node.y),
                             sy: me.node.scaleY < 0 ? -1 : 1,
                             col: GameData.settings.onlineCollide ? 1 : 0,
+                            sk: me.index === 0 ? (GameData.settings.skin1 || 0) : (typeof GameData.settings.skin2 === "number" ? GameData.settings.skin2 : 1),
                             room: GameData.roomCode || null,
                             lv: this.liveLevelKey(),
                             n: Fb.userName(),

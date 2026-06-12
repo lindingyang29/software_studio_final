@@ -118,6 +118,30 @@ $dark = New-Object System.Drawing.SolidBrush (C 255 110 50 10)
 $g.FillRectangle($dark, 8, 24, 24, 8)
 $g.Dispose(); $bmp.Save("$out\player2.png", [System.Drawing.Imaging.ImageFormat]::Png); $bmp.Dispose()
 
+# ---- player_green.png : 40x40 green runner cube ----
+$bmp, $g = New-Canvas 40 40
+$body = New-Object System.Drawing.SolidBrush (C 255 70 230 110)
+$g.FillRectangle($body, 3, 3, 34, 34)
+$edge = New-Object System.Drawing.Pen (C 255 180 255 190), 3
+$g.DrawRectangle($edge, 3, 3, 34, 34)
+$visor = New-Object System.Drawing.SolidBrush (C 255 240 255 245)
+$g.FillRectangle($visor, 18, 10, 14, 7)
+$dark = New-Object System.Drawing.SolidBrush (C 255 15 90 40)
+$g.FillRectangle($dark, 8, 24, 24, 8)
+$g.Dispose(); $bmp.Save("$out\player_green.png", [System.Drawing.Imaging.ImageFormat]::Png); $bmp.Dispose()
+
+# ---- player_purple.png : 40x40 purple runner cube ----
+$bmp, $g = New-Canvas 40 40
+$body = New-Object System.Drawing.SolidBrush (C 255 185 105 255)
+$g.FillRectangle($body, 3, 3, 34, 34)
+$edge = New-Object System.Drawing.Pen (C 255 230 190 255), 3
+$g.DrawRectangle($edge, 3, 3, 34, 34)
+$visor = New-Object System.Drawing.SolidBrush (C 255 250 240 255)
+$g.FillRectangle($visor, 18, 10, 14, 7)
+$dark = New-Object System.Drawing.SolidBrush (C 255 80 30 120)
+$g.FillRectangle($dark, 8, 24, 24, 8)
+$g.Dispose(); $bmp.Save("$out\player_purple.png", [System.Drawing.Imaging.ImageFormat]::Png); $bmp.Dispose()
+
 # ---- drone.png : 36x36 red patrol drone (cross blades + core) ----
 $bmp, $g = New-Canvas 36 36
 $blade = New-Object System.Drawing.SolidBrush (C 255 255 80 80)
