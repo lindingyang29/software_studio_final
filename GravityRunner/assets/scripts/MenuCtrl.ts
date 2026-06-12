@@ -22,6 +22,7 @@ export default class MenuCtrl extends cc.Component {
     private boardPanel: cc.Node = null;
     private savesPanel: cc.Node = null;
     private helpPanel: cc.Node = null;
+    private storyPanel: cc.Node = null;
     private uiSig = "";          // progress snapshot the UI was built from
     private suppressFade = false;
     // online room lobby
@@ -382,6 +383,12 @@ export default class MenuCtrl extends cc.Component {
         hBtn.on(cc.Node.EventType.TOUCH_END, () => {
             Sfx.play("click", 0.8);
             this.toggleHelp();
+        });
+        const stBtn = this.sprite(this.node, "white", -430, 270, 100, 26, cc.color(70, 40, 100));
+        this.label(stBtn, "BACKGROUND STORY", 0, 0, 9, white);
+        stBtn.on(cc.Node.EventType.TOUCH_END, () => {
+            Sfx.play("click", 0.8);
+            this.toggleStory();
         });
 
         this.hintLabel = this.label(this.node,
@@ -1208,6 +1215,7 @@ export default class MenuCtrl extends cc.Component {
         if (this.boardPanel) { this.boardPanel.destroy(); this.boardPanel = null; }
         if (this.savesPanel) { this.savesPanel.destroy(); this.savesPanel = null; }
         if (this.helpPanel) { this.helpPanel.destroy(); this.helpPanel = null; }
+        if (this.storyPanel) { this.storyPanel.destroy(); this.storyPanel = null; }
         if (this.customRoomPanel) { this.customRoomPanel.destroy(); this.customRoomPanel = null; }
         if (this.roomPanel) {
             this.removeRoomCodeInput();
@@ -1229,7 +1237,7 @@ export default class MenuCtrl extends cc.Component {
 
     private anyPanelOpen(): boolean {
         return !!(this.settingsPanel || this.accountPanel || this.boardPanel
-            || this.savesPanel || this.helpPanel || this.roomPanel
+            || this.savesPanel || this.helpPanel || this.storyPanel || this.roomPanel
             || this.customRoomPanel || this.rhythmPanel || this.keyBindPanel);
     }
 
@@ -1583,6 +1591,65 @@ export default class MenuCtrl extends cc.Component {
     }
 
     // ---------- how to play panel ----------
+
+    private toggleStory() {
+        if (this.storyPanel) {
+            this.closePanels();
+            return;
+        }
+        this.closePanels();
+
+        const white = cc.color(235, 240, 255);
+        const orange = cc.color(255, 181, 74);
+
+        const panel = this.sprite(this.node, "white", 0, 0, 700, 580, cc.color(10, 12, 26));
+        panel.opacity = 250;
+        panel.zIndex = 50;
+        panel.on(cc.Node.EventType.TOUCH_START, (e: cc.Event) => e.stopPropagation());
+        this.storyPanel = panel;
+
+        this.label(panel, "BACKGROUND STORY", 0, 258, 28, orange);
+
+        const story =
+            "As everyone knows, Newton invented gravity because he was a tsundere. "
+            + "Unable to win Hooke’s love, he created gravity solely to trap Hooke, "
+            + "ensuring that Hooke could never escape him for all eternity.\n\n"
+            + "This is a miraculous timeline where the world changed ever so slightly. "
+            + "In this timeline, Newton became Hooke’s disciple, preventing the two from "
+            + "becoming enemies. Instead, their relationship developed into a forbidden "
+            + "teacher-student romance, leading to a happy ending for both of them. Under "
+            + "the combined effects of the butterfly effect, Murphy’s law, and the second "
+            + "law of thermodynamics, gravity was never invented in this timeline. As a "
+            + "result, even by the 114514th century, people are still drifting around "
+            + "everywhere, and crops have to be glued into the soil in order to grow, "
+            + "causing all agricultural products to taste unpleasantly like glue. To solve "
+            + "this problem, the Astra organization established Laboratory Astra-9 in an "
+            + "attempt to create gravity.\n\n"
+            + "However, as members of society who love glue-flavored crops, we must protect "
+            + "everyone’s right to eat glue-flavored agricultural products. After "
+            + "infiltrating Laboratory Astra-9 three times—yes, three times—and enduring "
+            + "countless hardships, we finally stole the world-changing gravity generator "
+            + "on the eve of the research presentation.\n\n"
+            + "The player takes on the role of a thief who loves glue-flavored crops. Using "
+            + "the gravity generator in their hands, they must flip gravity and find a way "
+            + "to escape from the laboratory. Yes, the laboratory is filled with all kinds "
+            + "of pits and traps, because Astra had already anticipated the possibility of "
+            + "being robbed.";
+        const body = this.label(panel, story, 0, 226, 13, white);
+        body.anchorY = 1;
+        body.setContentSize(640, 10);
+        const bodyLb = body.getComponent(cc.Label);
+        bodyLb.overflow = cc.Label.Overflow.RESIZE_HEIGHT;
+        bodyLb.lineHeight = 17;
+        bodyLb.horizontalAlign = cc.Label.HorizontalAlign.LEFT;
+
+        const closeBtn = this.sprite(panel, "white", 0, -252, 160, 40, cc.color(50, 50, 60));
+        this.label(closeBtn, "CLOSE", 0, 0, 17, white);
+        closeBtn.on(cc.Node.EventType.TOUCH_END, () => {
+            Sfx.play("click", 0.8);
+            this.closePanels();
+        });
+    }
 
     private toggleHelp() {
         if (this.helpPanel) {
