@@ -32,6 +32,8 @@ export default class MenuCtrl extends cc.Component {
     private lastMembers: { uid: string; name: string; code: string }[] = [];
     private roomMembersBox: cc.Node = null;
     private roomStatus: cc.Label = null;
+    private customRoomPanel: cc.Node = null;
+    private readonly editorMapSlotsKey = "gfr_editor_map_slots";
     private rhythmPanel: cc.Node = null;
     private keyBindPanel: cc.Node = null;
     private keyBindKind = "";
@@ -1096,6 +1098,7 @@ export default class MenuCtrl extends cc.Component {
         if (this.boardPanel) { this.boardPanel.destroy(); this.boardPanel = null; }
         if (this.savesPanel) { this.savesPanel.destroy(); this.savesPanel = null; }
         if (this.helpPanel) { this.helpPanel.destroy(); this.helpPanel = null; }
+        if (this.customRoomPanel) { this.customRoomPanel.destroy(); this.customRoomPanel = null; }
         if (this.roomPanel) {
             this.roomPanel.destroy();
             this.roomPanel = null;
@@ -1116,7 +1119,7 @@ export default class MenuCtrl extends cc.Component {
     private anyPanelOpen(): boolean {
         return !!(this.settingsPanel || this.accountPanel || this.boardPanel
             || this.savesPanel || this.helpPanel || this.roomPanel
-            || this.rhythmPanel || this.keyBindPanel);
+            || this.customRoomPanel || this.rhythmPanel || this.keyBindPanel);
     }
 
     private toggleSettings() {
@@ -1586,6 +1589,14 @@ export default class MenuCtrl extends cc.Component {
         }
 
         this.label(panel, "— or —", 0, 60, 14, dim);
+        const customBtn = this.sprite(panel, "white", 0, 72, 190, 38, cc.color(58, 26, 84));
+        this.label(customBtn, "CUSTOM MAP", 0, 0, 16, white);
+        customBtn.on(cc.Node.EventType.TOUCH_END, (e: cc.Event) => {
+            e.stopPropagation();
+            Sfx.play("click", 0.8);
+            this.openCustomRoomMapPanel();
+        });
+
         this.label(panel, "JOIN A ROOM:", -220, 10, 16, dim, 0);
         const codeEb = this.editBox(panel, -40, -40, 220, "room code", false);
         const jBtn = this.sprite(panel, "white", 150, -40, 130, 44, cc.color(20, 70, 40));
@@ -1614,6 +1625,81 @@ export default class MenuCtrl extends cc.Component {
         });
     }
 
+    private loadEditorMapSlots(): any[] {
+        let slots: any[] = [];
+        try {
+            const raw = cc.sys.localStorage.getItem(this.editorMapSlotsKey);
+            slots = raw ? JSON.parse(raw) : [];
+        } catch (e) {
+            slots = [];
+        }
+        while (slots.length < 3) slots.push(null);
+        return slots.slice(0, 3);
+    }
+
+    private editorMapSlotTitle(slot: any, idx: number): string {
+        if (!slot || !slot.data) return "SLOT " + (idx + 1) + "   EMPTY";
+        const d = new Date(slot.t || 0);
+        const pad = (v: number) => (v < 10 ? "0" + v : "" + v);
+        return "SLOT " + (idx + 1) + "   " + (slot.data.name || "MY LEVEL")
+            + "   " + (d.getMonth() + 1) + "/" + d.getDate()
+            + " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
+    }
+
+    private openCustomRoomMapPanel() {
+        if (this.customRoomPanel) {
+            this.customRoomPanel.destroy();
+            this.customRoomPanel = null;
+        }
+        const white = cc.color(235, 240, 255);
+        const orange = cc.color(255, 181, 74);
+        const dim = cc.color(110, 120, 150);
+        const slots = this.loadEditorMapSlots();
+
+        const panel = this.sprite(this.node, "white", 0, 0, 560, 320, cc.color(10, 12, 26));
+        panel.opacity = 250;
+        panel.zIndex = 80;
+        panel.on(cc.Node.EventType.TOUCH_START, (e: cc.Event) => e.stopPropagation());
+        this.customRoomPanel = panel;
+
+        this.label(panel, "CUSTOM ROOM MAP", 0, 126, 24, orange);
+        this.label(panel, "choose an editor save slot for this room", 0, 96, 13, dim);
+
+        for (let i = 0; i < 3; i++) {
+            const slot = slots[i];
+            const y = 48 - i * 50;
+            const row = this.sprite(panel, "white", 0, y, 500, 42, slot ? cc.color(22, 30, 60) : cc.color(28, 28, 34));
+            this.label(row, this.editorMapSlotTitle(slot, i), -236, 0, 14, slot ? white : dim, 0);
+            if (!slot || !slot.data) continue;
+            const idx = i;
+            row.on(cc.Node.EventType.TOUCH_END, (e: cc.Event) => {
+                e.stopPropagation();
+                Sfx.play("power", 0.8);
+                const code = this.genRoomCode();
+                const data = JSON.parse(JSON.stringify(this.loadEditorMapSlots()[idx].data));
+                Fb.createRoom(code, 0, "", "CUSTOM MAP " + (idx + 1), data);
+                this.myRoom = code;
+                this.roomIsHost = true;
+                if (this.customRoomPanel) {
+                    this.customRoomPanel.destroy();
+                    this.customRoomPanel = null;
+                }
+                this.buildRoomLobby(0);
+            });
+        }
+
+        const closeBtn = this.sprite(panel, "white", 0, -128, 130, 36, cc.color(50, 50, 60));
+        this.label(closeBtn, "CLOSE", 0, 0, 16, white);
+        closeBtn.on(cc.Node.EventType.TOUCH_END, (e: cc.Event) => {
+            e.stopPropagation();
+            Sfx.play("click", 0.7);
+            if (this.customRoomPanel) {
+                this.customRoomPanel.destroy();
+                this.customRoomPanel = null;
+            }
+        });
+    }
+
     private buildRoomLobby(lv: number) {
         if (this.roomPanel) { this.roomPanel.destroy(); this.roomPanel = null; }
         const white = cc.color(235, 240, 255);
@@ -1628,7 +1714,7 @@ export default class MenuCtrl extends cc.Component {
         this.label(panel, this.roomIsHost
             ? "you are the HOST — share the code, then press START"
             : "waiting for the host to start...", 0, 176, 15, dim);
-        this.label(panel, roomTitle ? ("RHYTHM  " + roomTitle) : "synced race room", 0, 150, 13, cyan);
+        this.label(panel, roomTitle ? roomTitle : "synced race room", 0, 150, 13, cyan);
         this.roomStatus = this.label(panel, "", 0, 126, 14, cyan).getComponent(cc.Label);
 
         this.label(panel, "PLAYERS", 0, 96, 16, cc.color(255, 181, 74));
@@ -1680,11 +1766,19 @@ export default class MenuCtrl extends cc.Component {
                 GameData.roomCode = this.myRoom;
                 GameData.roomT0 = t0;
                 GameData.players = 1;
+                const custom = r.room.custom || null;
                 const path = String(r.room.path || "");
-                GameData.currentLevelPath = path;
-                GameData.rhythmBattleMode = path ? "online" : "solo";
+                if (custom && custom.goal) {
+                    cc.sys.localStorage.setItem(GameData.CUSTOM_KEY, JSON.stringify(custom));
+                    GameData.currentLevelPath = "";
+                    GameData.currentLevel = 0;
+                    GameData.rhythmBattleMode = "solo";
+                } else {
+                    GameData.currentLevelPath = path;
+                    GameData.rhythmBattleMode = path ? "online" : "solo";
+                    GameData.currentLevel = path ? (Number(r.room.lv) || 6) : ((r.room.lv === -1) ? -1 : (r.room.lv || 1));
+                }
                 GameData.pendingState = null;
-                GameData.currentLevel = path ? (Number(r.room.lv) || 6) : ((r.room.lv === -1) ? -1 : (r.room.lv || 1));
                 Fx.fadeTo("Game", this.node);
             }
             return;
