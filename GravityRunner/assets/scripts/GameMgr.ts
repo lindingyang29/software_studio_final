@@ -1021,7 +1021,7 @@ export default class GameMgr extends cc.Component {
         if (this.judgeLabel) this.judgeLabel.node.y = split ? -86 : 86;
         // same compact row in every mode: +-620 only fits a 1320px HUD,
         // which the 960px design resolution never shows
-        if (this.nameLabel) this.nameLabel.node.setPosition(-450, 286);
+        if (this.nameLabel) this.nameLabel.node.setPosition(-472, 286);
         if (this.crystalLabel) this.crystalLabel.node.setPosition(-210, 286);
         if (this.deathLabel) this.deathLabel.node.setPosition(80, 286);
         if (this.timeLabel) this.timeLabel.node.setPosition(450, 286);
@@ -1384,7 +1384,7 @@ export default class GameMgr extends cc.Component {
         this.rhythmBottomRightBlindNode = mkRightBlind("rhythmBottomRightBlindFx", -143);
 
         // top row must fit the 960px design width (visible x is +-480)
-        this.nameLabel = this.makeLabel(this.hud, -450, 286, 20, cyan, 0);
+        this.nameLabel = this.makeLabel(this.hud, -472, 286, 20, cyan, 0);
         this.crystalLabel = this.makeLabel(this.hud, -210, 286, 18, white, 0);
         this.deathLabel = this.makeLabel(this.hud, 80, 286, 18, pink, 0);
         this.timeLabel = this.makeLabel(this.hud, 450, 286, 22, orange, 1);
