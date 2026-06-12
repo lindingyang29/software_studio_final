@@ -1626,11 +1626,11 @@ export default class MenuCtrl extends cc.Component {
 
         if (this.roomIsHost) {
             const sBtn = this.sprite(panel, "white", 0, -150, 220, 50, cc.color(20, 90, 45));
-            this.label(sBtn, "START  (3s)", 0, 0, 19, white);
+            this.label(sBtn, "START  (5s)", 0, 0, 19, white);
             sBtn.on(cc.Node.EventType.TOUCH_END, (e: cc.Event) => {
                 e.stopPropagation();
                 Sfx.play("power", 0.9);
-                Fb.startRoom(Fb.serverNow() + 3500);
+                Fb.startRoom(Fb.serverNow() + 5200);
             });
         }
     }

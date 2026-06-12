@@ -57,6 +57,9 @@ export default class GameMgr extends cc.Component {
 
     // synced room start (server-clock timestamp; 0 = not a room race)
     private roomT0 = 0;
+    // Original server-clock start time for rhythm rooms.  Kept after roomT0
+    // reaches 0 so late audio-load clients can seek to the same song time.
+    private rhythmSyncT0 = 0;
 
     // online ghosts (gvx/gvy = velocity estimate, col = remote opted in to collision)
     private ghosts: { [uid: string]: { node: cc.Node; tx: number; ty: number; tsy: number; gvx: number; gvy: number; col: boolean; lastT: number; score: number; combo: number; name: string } } = {};
@@ -115,7 +118,7 @@ export default class GameMgr extends cc.Component {
 
     // Rhythm fight mode: deterministic attack notes + temporary interference.
     // Attack notes are the same on both tracks; when hit, they jam the opponent
-    // with one of three effects: speed-up, red/blue swap, or view blocker.
+    // with one of three effects: right-side blind, red/blue swap, or view blocker.
     private rhythmAttackSeq = 0;
     private rhythmAttackType = "";
     private rhythmAttackAt = 0;
@@ -234,6 +237,7 @@ export default class GameMgr extends cc.Component {
 
     private normalizeResourcePath(path: string): string {
         let p = String(path || "").trim().replace(/\\/g, "/");
+        try { p = decodeURIComponent(p); } catch (e) { /* keep raw path */ }
         p = p.replace(/^db:\/\/assets\/resources\//, "");
         p = p.replace(/^assets\/resources\//, "");
         p = p.replace(/^resources\//, "");
@@ -268,7 +272,9 @@ export default class GameMgr extends cc.Component {
         const norm = this.normalizeResourcePath(path);
         const safe = this.safeResourcePath(norm);
         const esc = this.cocosEscapedResourcePath(norm);
-        const arr = [norm, safe, esc];
+        // Try the web-safe name first.  Paths containing #U may work in the
+        // editor but can be interpreted as URL fragments in web builds.
+        const arr = [safe, norm, esc];
         const out: string[] = [];
         for (const p of arr) if (p && out.indexOf(p) < 0) out.push(p);
         return out;
@@ -313,7 +319,8 @@ export default class GameMgr extends cc.Component {
         if (this.isRhythmFightBattle()) modeTags.push("FIGHT");
         if (GameData.players === 2 && !this.isRhythmLevel()) modeTags.push("2P");
         let hudTitle = titlePrefix + this.level.name + (modeTags.length ? (" [" + modeTags.join("/") + "]") : "");
-        const hudLimit = this.shouldSplitRhythmBattle() ? 50 : 72;
+        // Keep the left title from running off-screen or overlapping the center HUD.
+        const hudLimit = this.shouldSplitRhythmBattle() ? 30 : 52;
         if (hudTitle.length > hudLimit) hudTitle = hudTitle.substr(0, hudLimit - 1) + "…";
         this.nameLabel.string = hudTitle;
         if (this.isRhythmLevel()) {
@@ -508,11 +515,10 @@ export default class GameMgr extends cc.Component {
     }
 
     private normalizeRhythmAttackType(type: string): string {
-        // Supported fight-mode jams.  FAST is deliberately NOT implemented by
-        // changing the runner's real x-speed; rhythm charts are synchronized by
-        // music time and fixed note positions, so real speed changes desync the
-        // chart.  Instead FAST is a short visual / pressure jam plus an AI skill
-        // penalty, which keeps judgement stable.
+        // Supported fight-mode jams.  The yellow attack keeps the old network
+        // type name "speed" for compatibility, but it no longer changes the
+        // runner speed.  It now blocks the right half of the attacked player's
+        // view, which is visible and stable for rhythm judgement.
         if (type === "speed") return "speed";
         if (type === "swap") return "swap";
         return "blind";
@@ -527,21 +533,21 @@ export default class GameMgr extends cc.Component {
 
     private rhythmAttackName(type: string): string {
         type = this.normalizeRhythmAttackType(type);
-        if (type === "speed") return "FAST";
+        if (type === "speed") return "RIGHT BLIND";
         if (type === "swap") return "R/B SWAP";
         return "BLIND";
     }
 
     private rhythmAttackDuration(type: string): number {
         type = this.normalizeRhythmAttackType(type);
-        if (type === "speed") return 3.4;
+        if (type === "speed") return 3.8;
         if (type === "swap") return 4.5;
         return 3.6;
     }
 
     private rhythmAttackPulseOpacity(type: string): number {
         type = this.normalizeRhythmAttackType(type);
-        if (type === "speed") return 116;
+        if (type === "speed") return 188;
         if (type === "swap") return 72;
         return 82;
     }
@@ -575,14 +581,12 @@ export default class GameMgr extends cc.Component {
                 line.opacity = 0;
                 continue;
             }
-            // Move bright streaks right-to-left inside the affected half. This
-            // gives FAST a clear speed-up feeling without changing real note or
-            // player positions, so rhythm judgement stays synchronized.
-            const phase = (now * 0.95 + offsetSeed + i * 137) % 1420;
-            line.x = 710 - phase;
-            line.y = -28 + (i % 5) * 14;
-            line.scaleX = 0.75 + ((now / 90 + i) % 3) * 0.12;
-            line.opacity = 125 + Math.floor((Math.sin(now / 70 + i) + 1) * 45);
+            // Yellow attack: warning stripes on the right-side blocker.
+            const phase = (now * 0.18 + offsetSeed + i * 41) % 360;
+            line.x = 40 + phase;
+            line.y = -96 + (i % 8) * 24;
+            line.scaleX = 0.65 + ((now / 130 + i) % 3) * 0.10;
+            line.opacity = 135 + Math.floor((Math.sin(now / 90 + i) + 1) * 35);
         }
     }
 
@@ -639,10 +643,14 @@ export default class GameMgr extends cc.Component {
     }
 
     rhythmSpeedMultiplier(): number {
-        // Kept for compatibility with older Player.ts builds.  Runtime fight
-        // effects must not change the runner's real x-speed because note timing
-        // is tied to music time and fixed world positions.
+        // Do not change real runner speed in rhythm fight mode.  Real speed
+        // changes make the cube position disagree with music-time note timing,
+        // which caused visible touches on red/blue notes to become MISS.
         return 1;
+    }
+
+    private rhythmFlowTime(): number {
+        return Sfx.getMusicTime();
     }
 
     private normalizeRhythmAction(action: string): string {
@@ -740,19 +748,38 @@ export default class GameMgr extends cc.Component {
         if (this.rhythmTopFxNode) {
             this.rhythmTopFxNode.active = this.isRhythmFightBattle() && !!topType;
             if (this.rhythmTopFxNode.active) {
-                this.rhythmTopFxNode.color = this.rhythmAttackColor(topType);
-                const pulse = topType === "speed" ? Math.floor((Math.sin(Date.now() / 70) + 1) * 24)
-                    : Math.floor((Math.sin(Date.now() / 140) + 1) * 12);
-                this.rhythmTopFxNode.opacity = this.rhythmAttackPulseOpacity(topType) + pulse;
+                if (topType === "speed") {
+                    // RIGHT BLIND: completely cover the attacked side's right half.
+                    // It must be fully opaque; otherwise notes are still visible and
+                    // the effect feels inconsistent.
+                    this.rhythmTopFxNode.color = cc.color(0, 0, 0);
+                    this.rhythmTopFxNode.setPosition(350, 130);
+                    this.rhythmTopFxNode.setContentSize(740, 260);
+                    this.rhythmTopFxNode.opacity = 255;
+                } else {
+                    this.rhythmTopFxNode.color = this.rhythmAttackColor(topType);
+                    this.rhythmTopFxNode.setPosition(0, 184);
+                    this.rhythmTopFxNode.setContentSize(1320, 74);
+                    const pulse = Math.floor((Math.sin(Date.now() / 140) + 1) * 12);
+                    this.rhythmTopFxNode.opacity = this.rhythmAttackPulseOpacity(topType) + pulse;
+                }
             }
         }
         if (this.rhythmBottomFxNode) {
             this.rhythmBottomFxNode.active = this.isRhythmFightBattle() && !!botType;
             if (this.rhythmBottomFxNode.active) {
-                this.rhythmBottomFxNode.color = this.rhythmAttackColor(botType);
-                const pulse = botType === "speed" ? Math.floor((Math.sin(Date.now() / 70) + 1) * 24)
-                    : Math.floor((Math.sin(Date.now() / 140) + 1) * 12);
-                this.rhythmBottomFxNode.opacity = this.rhythmAttackPulseOpacity(botType) + pulse;
+                if (botType === "speed") {
+                    this.rhythmBottomFxNode.color = cc.color(0, 0, 0);
+                    this.rhythmBottomFxNode.setPosition(350, -130);
+                    this.rhythmBottomFxNode.setContentSize(740, 260);
+                    this.rhythmBottomFxNode.opacity = 255;
+                } else {
+                    this.rhythmBottomFxNode.color = this.rhythmAttackColor(botType);
+                    this.rhythmBottomFxNode.setPosition(0, -184);
+                    this.rhythmBottomFxNode.setContentSize(1320, 82);
+                    const pulse = Math.floor((Math.sin(Date.now() / 140) + 1) * 12);
+                    this.rhythmBottomFxNode.opacity = this.rhythmAttackPulseOpacity(botType) + pulse;
+                }
             }
         }
         this.updateRhythmFastLines(this.rhythmTopFastLines, this.isRhythmFightBattle() && this.rhythmOppFxSpeedT > 0, 0);
@@ -769,7 +796,7 @@ export default class GameMgr extends cc.Component {
             return;
         }
         const parts: string[] = [];
-        if (this.rhythmFxSpeedT > 0) parts.push("FAST x1.6 " + this.rhythmFxSpeedT.toFixed(1));
+        if (this.rhythmFxSpeedT > 0) parts.push("RIGHT BLIND " + this.rhythmFxSpeedT.toFixed(1));
         if (this.rhythmFxSwapT > 0) parts.push("R/B SWAP " + this.rhythmFxSwapT.toFixed(1));
         if (this.rhythmFxBlindT > 0) parts.push("BLIND " + this.rhythmFxBlindT.toFixed(1));
         if (parts.length) {
@@ -790,7 +817,7 @@ export default class GameMgr extends cc.Component {
             return;
         }
         const parts: string[] = [];
-        if (this.rhythmOppFxSpeedT > 0) parts.push("FAST x1.6 " + this.rhythmOppFxSpeedT.toFixed(1));
+        if (this.rhythmOppFxSpeedT > 0) parts.push("RIGHT BLIND " + this.rhythmOppFxSpeedT.toFixed(1));
         if (this.rhythmOppFxSwapT > 0) parts.push("R/B SWAP " + this.rhythmOppFxSwapT.toFixed(1));
         if (this.rhythmOppFxBlindT > 0) parts.push("BLIND " + this.rhythmOppFxBlindT.toFixed(1));
         if (parts.length) {
@@ -981,7 +1008,7 @@ export default class GameMgr extends cc.Component {
         if (this.rhythmEffectLabel) this.rhythmEffectLabel.node.setPosition(0, split ? -232 : 216);
         if (this.rhythmOpponentEffectLabel) this.rhythmOpponentEffectLabel.node.setPosition(0, split ? 228 : 198);
         if (this.judgeLabel) this.judgeLabel.node.y = split ? -86 : 86;
-        if (this.nameLabel) this.nameLabel.node.setPosition(-620, 286);
+        if (this.nameLabel) this.nameLabel.node.setPosition(-500, 286);
         if (this.crystalLabel) this.crystalLabel.node.setPosition(-40, 286);
         if (this.deathLabel) this.deathLabel.node.setPosition(330, 286);
         if (this.timeLabel) this.timeLabel.node.setPosition(620, 286);
@@ -1307,7 +1334,7 @@ export default class GameMgr extends cc.Component {
         this.rhythmTopFastLines = this.makeRhythmFastLines(this.rhythmTopFxNode);
         this.rhythmBottomFastLines = this.makeRhythmFastLines(this.rhythmBottomFxNode);
 
-        this.nameLabel = this.makeLabel(this.hud, -620, 286, 20, cyan, 0);
+        this.nameLabel = this.makeLabel(this.hud, -500, 286, 18, cyan, 0);
         this.crystalLabel = this.makeLabel(this.hud, -40, 286, 18, white, 0.5);
         this.deathLabel = this.makeLabel(this.hud, 330, 286, 20, pink, 0.5);
         this.timeLabel = this.makeLabel(this.hud, 620, 286, 22, orange, 1);
@@ -1674,6 +1701,13 @@ export default class GameMgr extends cc.Component {
         Sfx.playMusic(this.level.rhythm.audio || "rhythm_song", false, () => {
             if (!this.node || !this.node.isValid || !this.isRhythmLevel()) return;
             if (this.state !== "loading") return;
+            // Room clients may finish loading audio at slightly different times.
+            // Seek to the server-clock song position immediately after playback
+            // starts so host and members stay aligned.
+            if (this.rhythmSyncT0 > 0) {
+                const offset = Math.max(0, (Fb.serverNow() - this.rhythmSyncT0) / 1000);
+                if (offset > 0.04) Sfx.seekMusic(offset);
+            }
             this.state = "run";
             this.setMsg("", "");
         });
@@ -2110,7 +2144,7 @@ export default class GameMgr extends cc.Component {
         if (!this.isRhythmLevel()) return;
         action = this.normalizeRhythmAction(action);
         const r = this.level.rhythm;
-        const t = Sfx.getMusicTime();
+        const t = this.rhythmFlowTime();
         const badW = r.badWindow || 0.17;
         const goodW = r.goodWindow || 0.11;
         const perfectW = r.perfectWindow || 0.055;
@@ -2223,7 +2257,7 @@ export default class GameMgr extends cc.Component {
     private updateJumpFlipTouches() {
         if (!this.isJumpFlipRhythm()) return;
         const r = this.level.rhythm;
-        const t = Sfx.getMusicTime();
+        const t = this.rhythmFlowTime();
         const badW = r.badWindow || 0.17;
         const goodW = r.goodWindow || 0.11;
         const perfectW = r.perfectWindow || 0.055;
@@ -2282,7 +2316,7 @@ export default class GameMgr extends cc.Component {
 
     private updateRhythm() {
         const r = this.level.rhythm;
-        const t = Sfx.getMusicTime();
+        const t = this.rhythmFlowTime();
         const badW = r.badWindow || 0.17;
 
         // Jump/flip rhythm is collision-based: pressing the key only moves the
@@ -2348,6 +2382,29 @@ export default class GameMgr extends cc.Component {
             break;
         }
         this.updateRhythmHud();
+    }
+
+    private rhythmChartEndTime(): number {
+        if (!this.isRhythmLevel()) return 0;
+        const r: any = this.level.rhythm;
+        let end = 0;
+        for (const n of r.notes || []) end = Math.max(end, this.rhythmNoteTime(n));
+        for (const roll of r.rolls || []) end = Math.max(end, Number(roll.end) || 0);
+        return end;
+    }
+
+    private finishRhythmIfComplete() {
+        if (!this.isRhythmLevel() || this.state !== "run") return;
+        const r: any = this.level.rhythm;
+        const endT = this.rhythmChartEndTime();
+        const t = this.rhythmFlowTime();
+        if (endT <= 0 || t < endT + 1.1) return;
+        for (const n of r.notes || []) {
+            if (!n.judged) this.judgeNote(n, "miss");
+        }
+        this.advanceRhythmIndex();
+        const p = this.players && this.players.length ? this.players[0] : null;
+        this.onWin(p || undefined);
     }
 
     // ---------- rotation zones ----------
@@ -2470,7 +2527,7 @@ export default class GameMgr extends cc.Component {
         if (!this.isJumpFlipRhythm() || !this.level || !this.level.rhythm) return false;
         const rolls: any[] = (this.level.rhythm as any).rolls || [];
         if (!rolls.length) return false;
-        const t = Sfx.getMusicTime();
+        const t = this.rhythmFlowTime();
         return rolls.some(r => t >= Number(r.start) && t <= Number(r.end));
     }
 
@@ -2691,8 +2748,10 @@ export default class GameMgr extends cc.Component {
         if (this.state === "ready" && this.roomT0 > 0) {
             const remain = (this.roomT0 - Fb.serverNow()) / 1000;
             if (remain <= 0) {
+                const startAt = this.roomT0;
                 this.roomT0 = 0;
                 if (this.isRhythmLevel()) {
+                    this.rhythmSyncT0 = startAt;
                     this.startRhythmRun();
                 } else {
                     this.state = "run";
@@ -2742,6 +2801,7 @@ export default class GameMgr extends cc.Component {
             this.updateRhythmFightEffects(dt);
             this.updateRhythm();
             this.updateRhythmAi(dt);
+            this.finishRhythmIfComplete();
         }
 
         // endless: ramp speed, track distance, stream chunks ahead / drop behind

@@ -53,7 +53,8 @@ export default class Sfx {
         const norm = String(name || "bgm_menu").trim().replace(/^audio\//, "").replace(/\.(ogg|wav|mp3)$/i, "");
         const safe = Sfx.safeResourceName(norm);
         const esc = Sfx.escapeResourceName(norm);
-        const arr = [norm, safe, esc];
+        // Safe first: # in resource names can break web URLs.
+        const arr = [safe, norm, esc];
         const out: string[] = [];
         for (const p of arr) if (p && out.indexOf(p) < 0) out.push(p);
         return out;
@@ -94,6 +95,15 @@ export default class Sfx {
             });
         };
         tryLoad(0);
+    }
+
+    static seekMusic(seconds: number) {
+        if (Sfx.bgmId < 0) return;
+        try {
+            cc.audioEngine.setCurrentTime(Sfx.bgmId, Math.max(0, seconds));
+        } catch (e) {
+            // Some platforms may not support seeking all formats; keep playing.
+        }
     }
 
     static getMusicTime(): number {
