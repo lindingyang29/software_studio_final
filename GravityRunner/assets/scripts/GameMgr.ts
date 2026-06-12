@@ -1803,6 +1803,8 @@ export default class GameMgr extends cc.Component {
             if (this.rhythmServerStartT0 > 0) {
                 const target = Math.max(0, (Fb.serverNow() - this.rhythmServerStartT0) / 1000);
                 Sfx.seekMusic(target);
+                this.syncRhythmRunnerToMusicTime(target, true);
+                this.time = target;
             }
             this.state = "run";
             this.setMsg("", "");
@@ -1939,6 +1941,31 @@ export default class GameMgr extends cc.Component {
 
     private rhythmNoteTime(n: any): number {
         return Number(n && (n as any).hitTime !== undefined ? (n as any).hitTime : (n ? n.time : 0));
+    }
+
+    private rhythmRunnerXAtMusicTime(t: number): number {
+        const speed = this.level ? (Number(this.level.speed) || 300) : 300;
+        const startX = this.level && this.level.start ? (Number(this.level.start.x) || 0) : 0;
+        return startX + Math.max(0, Number(t) || 0) * speed;
+    }
+
+    private syncRhythmRunnerToMusicTime(t: number, snapCamera: boolean) {
+        if (!this.isRhythmLevel() || !this.level) return;
+        const x = this.rhythmRunnerXAtMusicTime(t);
+        for (const p of this.players) {
+            if (!p || !p.node || !p.node.isValid) continue;
+            // In online rhythm battles the authoritative timeline is the room's
+            // server-clock music time.  If the music is seeked forward but the
+            // runner remains near the start, notes are judged late while still
+            // drawn far to the right.  Keep the runner on the same x/time line
+            // as the chart: note.x == start.x + note.hitTime * level.speed.
+            p.node.x = x;
+        }
+        if (this.rhythmAiNode && this.rhythmAiNode.isValid) this.rhythmAiNode.x = x;
+        if (snapCamera && this.cameraNode) {
+            const follow = this.cameraNode.getComponent(CameraFollow);
+            if (follow) follow.snap();
+        }
     }
 
     private spawnRhythmAi() {
@@ -2846,6 +2873,8 @@ export default class GameMgr extends cc.Component {
         // music does not stutter on unstable networks.
         if (Math.abs(drift) > 0.18 && Math.abs(target - this.rhythmLastHardSync) > 1.5) {
             Sfx.seekMusic(target);
+            this.syncRhythmRunnerToMusicTime(target, true);
+            this.time = target;
             this.rhythmLastHardSync = target;
         }
     }
