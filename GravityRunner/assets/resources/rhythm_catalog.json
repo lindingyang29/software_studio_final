@@ -1,164 +1,24 @@
 {
   "songs": [
     {
-      "id": "#U5343#U672c#U685c",
-      "title": "千本桜",
-      "difficulties": [
-        {
-          "name": "EASY",
-          "path": "levels/rhythm/千本桜_easy"
-        },
-        {
-          "name": "NORMAL",
-          "path": "levels/rhythm/千本桜_normal"
-        },
-        {
-          "name": "HARD",
-          "path": "levels/rhythm/千本桜_hard"
-        },
-        {
-          "name": "ONI",
-          "path": "levels/rhythm/千本桜_oni"
-        },
-        {
-          "name": "EDIT",
-          "path": "levels/rhythm/千本桜_edit"
-        }
-      ]
-    },
-    {
-      "id": "#U590f#U796d#U308a",
-      "title": "夏祭り",
-      "difficulties": [
-        {
-          "name": "EASY",
-          "path": "levels/rhythm/夏祭り_easy"
-        },
-        {
-          "name": "NORMAL",
-          "path": "levels/rhythm/夏祭り_normal"
-        },
-        {
-          "name": "HARD",
-          "path": "levels/rhythm/夏祭り_hard"
-        },
-        {
-          "name": "ONI",
-          "path": "levels/rhythm/夏祭り_oni"
-        }
-      ]
-    },
-    {
-      "id": "#U5e7d#U7384#U30ce#U4e71",
-      "title": "幽玄ノ乱",
-      "difficulties": [
-        {
-          "name": "EASY",
-          "path": "levels/rhythm/幽玄ノ乱_easy"
-        },
-        {
-          "name": "NORMAL",
-          "path": "levels/rhythm/幽玄ノ乱_normal"
-        },
-        {
-          "name": "HARD",
-          "path": "levels/rhythm/幽玄ノ乱_hard"
-        },
-        {
-          "name": "ONI",
-          "path": "levels/rhythm/幽玄ノ乱_oni"
-        }
-      ]
-    },
-    {
-      "id": "#U604b#U305b#U3088#U4e59#U5973#Uff01",
-      "title": "恋せよ乙女！",
-      "difficulties": [
-        {
-          "name": "EASY",
-          "path": "levels/rhythm/#U604b#U305b#U3088#U4e59#U5973#Uff01_easy"
-        },
-        {
-          "name": "NORMAL",
-          "path": "levels/rhythm/#U604b#U305b#U3088#U4e59#U5973#Uff01_normal"
-        },
-        {
-          "name": "HARD",
-          "path": "levels/rhythm/#U604b#U305b#U3088#U4e59#U5973#Uff01_hard"
-        },
-        {
-          "name": "ONI",
-          "path": "levels/rhythm/#U604b#U305b#U3088#U4e59#U5973#Uff01_oni"
-        },
-        {
-          "name": "EDIT",
-          "path": "levels/rhythm/#U604b#U305b#U3088#U4e59#U5973#Uff01_edit"
-        }
-      ]
-    },
-    {
-      "id": "#U604b#U3072#U604b#U3075#U7e01",
-      "title": "恋ひ恋ふ縁",
-      "difficulties": [
-        {
-          "name": "EASY",
-          "path": "levels/rhythm/恋ひ恋ふ縁_easy"
-        },
-        {
-          "name": "NORMAL",
-          "path": "levels/rhythm/恋ひ恋ふ縁_normal"
-        },
-        {
-          "name": "HARD",
-          "path": "levels/rhythm/恋ひ恋ふ縁_hard"
-        },
-        {
-          "name": "ONI",
-          "path": "levels/rhythm/恋ひ恋ふ縁_oni"
-        }
-      ]
-    },
-    {
-      "id": "#U6a84!#U5e1d#U56fd#U83ef#U6483#U56e3",
-      "title": "檄!帝国華撃団",
-      "difficulties": [
-        {
-          "name": "EASY",
-          "path": "levels/rhythm/檄!帝国華撃団_easy"
-        },
-        {
-          "name": "NORMAL",
-          "path": "levels/rhythm/檄!帝国華撃団_normal"
-        },
-        {
-          "name": "HARD",
-          "path": "levels/rhythm/檄!帝国華撃団_hard"
-        },
-        {
-          "name": "ONI",
-          "path": "levels/rhythm/檄!帝国華撃団_oni"
-        }
-      ]
-    },
-    {
-      "id": "Ahoy!!_我ら宝鐘海賊団☆",
+      "id": "Ahoy!!_u6211u3089u5b9du9418u6d77u8ccau56e3u2606",
       "title": "Ahoy!! 我ら宝鐘海賊団☆",
       "difficulties": [
         {
           "name": "EASY",
-          "path": "levels/rhythm/Ahoy!!_我ら宝鐘海賊団☆_easy"
+          "path": "levels/rhythm/Ahoy!!_u6211u3089u5b9du9418u6d77u8ccau56e3u2606_easy"
         },
         {
           "name": "NORMAL",
-          "path": "levels/rhythm/Ahoy!!_我ら宝鐘海賊団☆_normal"
+          "path": "levels/rhythm/Ahoy!!_u6211u3089u5b9du9418u6d77u8ccau56e3u2606_normal"
         },
         {
           "name": "HARD",
-          "path": "levels/rhythm/Ahoy!!_我ら宝鐘海賊団☆_hard"
+          "path": "levels/rhythm/Ahoy!!_u6211u3089u5b9du9418u6d77u8ccau56e3u2606_hard"
         },
         {
           "name": "ONI",
-          "path": "levels/rhythm/Ahoy!!_我ら宝鐘海賊団☆_oni"
+          "path": "levels/rhythm/Ahoy!!_u6211u3089u5b9du9418u6d77u8ccau56e3u2606_oni"
         }
       ]
     },
@@ -303,326 +163,326 @@
       ]
     },
     {
-      "id": "テトリス",
+      "id": "u30c6u30c8u30eau30b9",
       "title": "テトリス",
       "difficulties": [
         {
           "name": "EASY",
-          "path": "levels/rhythm/テトリス_easy"
+          "path": "levels/rhythm/u30c6u30c8u30eau30b9_easy"
         },
         {
           "name": "NORMAL",
-          "path": "levels/rhythm/テトリス_normal"
+          "path": "levels/rhythm/u30c6u30c8u30eau30b9_normal"
         },
         {
           "name": "HARD",
-          "path": "levels/rhythm/テトリス_hard"
+          "path": "levels/rhythm/u30c6u30c8u30eau30b9_hard"
         },
         {
           "name": "ONI",
-          "path": "levels/rhythm/テトリス_oni"
+          "path": "levels/rhythm/u30c6u30c8u30eau30b9_oni"
         }
       ]
     },
     {
-      "id": "ねねねねねねねね!大爆走",
+      "id": "u306du306du306du306du306du306du306du306d!u5927u7206u8d70",
       "title": "ねねねねねねねね!大爆走",
       "difficulties": [
         {
           "name": "EASY",
-          "path": "levels/rhythm/ねねねねねねねね!大爆走_easy"
+          "path": "levels/rhythm/u306du306du306du306du306du306du306du306d!u5927u7206u8d70_easy"
         },
         {
           "name": "NORMAL",
-          "path": "levels/rhythm/ねねねねねねねね!大爆走_normal"
+          "path": "levels/rhythm/u306du306du306du306du306du306du306du306d!u5927u7206u8d70_normal"
         },
         {
           "name": "HARD",
-          "path": "levels/rhythm/ねねねねねねねね!大爆走_hard"
+          "path": "levels/rhythm/u306du306du306du306du306du306du306du306d!u5927u7206u8d70_hard"
         },
         {
           "name": "ONI",
-          "path": "levels/rhythm/ねねねねねねねね!大爆走_oni"
+          "path": "levels/rhythm/u306du306du306du306du306du306du306du306d!u5927u7206u8d70_oni"
         }
       ]
     },
     {
-      "id": "ぺこみこ大戦争!!",
+      "id": "u307au3053u307fu3053u5927u6226u4e89!!",
       "title": "ぺこみこ大戦争‼",
       "difficulties": [
         {
           "name": "EASY",
-          "path": "levels/rhythm/ぺこみこ大戦争!!_easy"
+          "path": "levels/rhythm/u307au3053u307fu3053u5927u6226u4e89!!_easy"
         },
         {
           "name": "NORMAL",
-          "path": "levels/rhythm/ぺこみこ大戦争!!_normal"
+          "path": "levels/rhythm/u307au3053u307fu3053u5927u6226u4e89!!_normal"
         },
         {
           "name": "HARD",
-          "path": "levels/rhythm/ぺこみこ大戦争!!_hard"
+          "path": "levels/rhythm/u307au3053u307fu3053u5927u6226u4e89!!_hard"
         },
         {
           "name": "ONI",
-          "path": "levels/rhythm/ぺこみこ大戦争!!_oni"
+          "path": "levels/rhythm/u307au3053u307fu3053u5927u6226u4e89!!_oni"
         }
       ]
     },
     {
-      "id": "やわらか戦車",
+      "id": "u3084u308fu3089u304bu6226u8eca",
       "title": "やわらか戦車",
       "difficulties": [
         {
           "name": "EASY",
-          "path": "levels/rhythm/やわらか戦車_easy"
+          "path": "levels/rhythm/u3084u308fu3089u304bu6226u8eca_easy"
         },
         {
           "name": "NORMAL",
-          "path": "levels/rhythm/やわらか戦車_normal"
+          "path": "levels/rhythm/u3084u308fu3089u304bu6226u8eca_normal"
         },
         {
           "name": "HARD",
-          "path": "levels/rhythm/やわらか戦車_hard"
+          "path": "levels/rhythm/u3084u308fu3089u304bu6226u8eca_hard"
         },
         {
           "name": "ONI",
-          "path": "levels/rhythm/やわらか戦車_oni"
+          "path": "levels/rhythm/u3084u308fu3089u304bu6226u8eca_oni"
         },
         {
           "name": "EDIT",
-          "path": "levels/rhythm/やわらか戦車_edit"
+          "path": "levels/rhythm/u3084u308fu3089u304bu6226u8eca_edit"
         }
       ]
     },
     {
-      "id": "夏祭り",
+      "id": "u590fu796du308a",
       "title": "夏祭り",
       "difficulties": [
         {
           "name": "EASY",
-          "path": "levels/rhythm/夏祭り_easy"
+          "path": "levels/rhythm/u590fu796du308a_easy"
         },
         {
           "name": "NORMAL",
-          "path": "levels/rhythm/夏祭り_normal"
+          "path": "levels/rhythm/u590fu796du308a_normal"
         },
         {
           "name": "HARD",
-          "path": "levels/rhythm/夏祭り_hard"
+          "path": "levels/rhythm/u590fu796du308a_hard"
         },
         {
           "name": "ONI",
-          "path": "levels/rhythm/夏祭り_oni"
+          "path": "levels/rhythm/u590fu796du308a_oni"
         }
       ]
     },
     {
-      "id": "雑踏、僕らの街",
+      "id": "u96d1u8e0fu3001u50d5u3089u306eu8857",
       "title": "雑踏、僕らの街",
       "difficulties": [
         {
           "name": "EASY",
-          "path": "levels/rhythm/雑踏、僕らの街_easy"
+          "path": "levels/rhythm/u96d1u8e0fu3001u50d5u3089u306eu8857_easy"
         },
         {
           "name": "NORMAL",
-          "path": "levels/rhythm/雑踏、僕らの街_normal"
+          "path": "levels/rhythm/u96d1u8e0fu3001u50d5u3089u306eu8857_normal"
         },
         {
           "name": "HARD",
-          "path": "levels/rhythm/雑踏、僕らの街_hard"
+          "path": "levels/rhythm/u96d1u8e0fu3001u50d5u3089u306eu8857_hard"
         },
         {
           "name": "ONI",
-          "path": "levels/rhythm/雑踏、僕らの街_oni"
+          "path": "levels/rhythm/u96d1u8e0fu3001u50d5u3089u306eu8857_oni"
         },
         {
           "name": "EDIT",
-          "path": "levels/rhythm/雑踏、僕らの街_edit"
+          "path": "levels/rhythm/u96d1u8e0fu3001u50d5u3089u306eu8857_edit"
         }
       ]
     },
     {
-      "id": "粛聖!!_ロリ神レクイエム☆",
+      "id": "u7c9bu8056!!_u30edu30eau795eu30ecu30afu30a4u30a8u30e0u2606",
       "title": "粛聖!! ロリ神レクイエム☆",
       "difficulties": [
         {
           "name": "EASY",
-          "path": "levels/rhythm/粛聖!!_ロリ神レクイエム☆_easy"
+          "path": "levels/rhythm/u7c9bu8056!!_u30edu30eau795eu30ecu30afu30a4u30a8u30e0u2606_easy"
         },
         {
           "name": "NORMAL",
-          "path": "levels/rhythm/粛聖!!_ロリ神レクイエム☆_normal"
+          "path": "levels/rhythm/u7c9bu8056!!_u30edu30eau795eu30ecu30afu30a4u30a8u30e0u2606_normal"
         },
         {
           "name": "HARD",
-          "path": "levels/rhythm/粛聖!!_ロリ神レクイエム☆_hard"
+          "path": "levels/rhythm/u7c9bu8056!!_u30edu30eau795eu30ecu30afu30a4u30a8u30e0u2606_hard"
         },
         {
           "name": "ONI",
-          "path": "levels/rhythm/粛聖!!_ロリ神レクイエム☆_oni"
+          "path": "levels/rhythm/u7c9bu8056!!_u30edu30eau795eu30ecu30afu30a4u30a8u30e0u2606_oni"
         }
       ]
     },
     {
-      "id": "千本桜",
+      "id": "u5343u672cu685c",
       "title": "千本桜",
       "difficulties": [
         {
           "name": "EASY",
-          "path": "levels/rhythm/千本桜_easy"
+          "path": "levels/rhythm/u5343u672cu685c_easy"
         },
         {
           "name": "NORMAL",
-          "path": "levels/rhythm/千本桜_normal"
+          "path": "levels/rhythm/u5343u672cu685c_normal"
         },
         {
           "name": "HARD",
-          "path": "levels/rhythm/千本桜_hard"
+          "path": "levels/rhythm/u5343u672cu685c_hard"
         },
         {
           "name": "ONI",
-          "path": "levels/rhythm/千本桜_oni"
+          "path": "levels/rhythm/u5343u672cu685c_oni"
         },
         {
           "name": "EDIT",
-          "path": "levels/rhythm/千本桜_edit"
+          "path": "levels/rhythm/u5343u672cu685c_edit"
         }
       ]
     },
     {
-      "id": "泥の分際で私だけの大切を奪おうだなんて",
+      "id": "u6ce5u306eu5206u969bu3067u79c1u3060u3051u306eu5927u5207u3092u596au304au3046u3060u306au3093u3066",
       "title": "泥の分際で私だけの大切を奪おうだなんて",
       "difficulties": [
         {
           "name": "EASY",
-          "path": "levels/rhythm/泥の分際で私だけの大切を奪おうだなんて_easy"
+          "path": "levels/rhythm/u6ce5u306eu5206u969bu3067u79c1u3060u3051u306eu5927u5207u3092u596au304au3046u3060u306au3093u3066_easy"
         },
         {
           "name": "NORMAL",
-          "path": "levels/rhythm/泥の分際で私だけの大切を奪おうだなんて_normal"
+          "path": "levels/rhythm/u6ce5u306eu5206u969bu3067u79c1u3060u3051u306eu5927u5207u3092u596au304au3046u3060u306au3093u3066_normal"
         },
         {
           "name": "HARD",
-          "path": "levels/rhythm/泥の分際で私だけの大切を奪おうだなんて_hard"
+          "path": "levels/rhythm/u6ce5u306eu5206u969bu3067u79c1u3060u3051u306eu5927u5207u3092u596au304au3046u3060u306au3093u3066_hard"
         },
         {
           "name": "ONI",
-          "path": "levels/rhythm/泥の分際で私だけの大切を奪おうだなんて_oni"
+          "path": "levels/rhythm/u6ce5u306eu5206u969bu3067u79c1u3060u3051u306eu5927u5207u3092u596au304au3046u3060u306au3093u3066_oni"
         }
       ]
     },
     {
-      "id": "夜に駆ける",
+      "id": "u591cu306bu99c6u3051u308b",
       "title": "夜に駆ける",
       "difficulties": [
         {
           "name": "EASY",
-          "path": "levels/rhythm/夜に駆ける_easy"
+          "path": "levels/rhythm/u591cu306bu99c6u3051u308b_easy"
         },
         {
           "name": "NORMAL",
-          "path": "levels/rhythm/夜に駆ける_normal"
+          "path": "levels/rhythm/u591cu306bu99c6u3051u308b_normal"
         },
         {
           "name": "HARD",
-          "path": "levels/rhythm/夜に駆ける_hard"
+          "path": "levels/rhythm/u591cu306bu99c6u3051u308b_hard"
         },
         {
           "name": "ONI",
-          "path": "levels/rhythm/夜に駆ける_oni"
+          "path": "levels/rhythm/u591cu306bu99c6u3051u308b_oni"
         }
       ]
     },
     {
-      "id": "幽玄ノ乱",
+      "id": "u5e7du7384u30ceu4e71",
       "title": "幽玄ノ乱",
       "difficulties": [
         {
           "name": "EASY",
-          "path": "levels/rhythm/幽玄ノ乱_easy"
+          "path": "levels/rhythm/u5e7du7384u30ceu4e71_easy"
         },
         {
           "name": "NORMAL",
-          "path": "levels/rhythm/幽玄ノ乱_normal"
+          "path": "levels/rhythm/u5e7du7384u30ceu4e71_normal"
         },
         {
           "name": "HARD",
-          "path": "levels/rhythm/幽玄ノ乱_hard"
+          "path": "levels/rhythm/u5e7du7384u30ceu4e71_hard"
         },
         {
           "name": "ONI",
-          "path": "levels/rhythm/幽玄ノ乱_oni"
+          "path": "levels/rhythm/u5e7du7384u30ceu4e71_oni"
         }
       ]
     },
     {
-      "id": "恋せよ乙女!",
+      "id": "u604bu305bu3088u4e59u5973!",
       "title": "恋せよ乙女！",
       "difficulties": [
         {
           "name": "EASY",
-          "path": "levels/rhythm/恋せよ乙女!_easy"
+          "path": "levels/rhythm/u604bu305bu3088u4e59u5973!_easy"
         },
         {
           "name": "NORMAL",
-          "path": "levels/rhythm/恋せよ乙女!_normal"
+          "path": "levels/rhythm/u604bu305bu3088u4e59u5973!_normal"
         },
         {
           "name": "HARD",
-          "path": "levels/rhythm/恋せよ乙女!_hard"
+          "path": "levels/rhythm/u604bu305bu3088u4e59u5973!_hard"
         },
         {
           "name": "ONI",
-          "path": "levels/rhythm/恋せよ乙女!_oni"
+          "path": "levels/rhythm/u604bu305bu3088u4e59u5973!_oni"
         },
         {
           "name": "EDIT",
-          "path": "levels/rhythm/恋せよ乙女!_edit"
+          "path": "levels/rhythm/u604bu305bu3088u4e59u5973!_edit"
         }
       ]
     },
     {
-      "id": "恋ひ恋ふ縁",
+      "id": "u604bu3072u604bu3075u7e01",
       "title": "恋ひ恋ふ縁",
       "difficulties": [
         {
           "name": "EASY",
-          "path": "levels/rhythm/恋ひ恋ふ縁_easy"
+          "path": "levels/rhythm/u604bu3072u604bu3075u7e01_easy"
         },
         {
           "name": "NORMAL",
-          "path": "levels/rhythm/恋ひ恋ふ縁_normal"
+          "path": "levels/rhythm/u604bu3072u604bu3075u7e01_normal"
         },
         {
           "name": "HARD",
-          "path": "levels/rhythm/恋ひ恋ふ縁_hard"
+          "path": "levels/rhythm/u604bu3072u604bu3075u7e01_hard"
         },
         {
           "name": "ONI",
-          "path": "levels/rhythm/恋ひ恋ふ縁_oni"
+          "path": "levels/rhythm/u604bu3072u604bu3075u7e01_oni"
         }
       ]
     },
     {
-      "id": "檄!帝国華撃団",
+      "id": "u6a84!u5e1du56fdu83efu6483u56e3",
       "title": "檄!帝国華撃団",
       "difficulties": [
         {
           "name": "EASY",
-          "path": "levels/rhythm/檄!帝国華撃団_easy"
+          "path": "levels/rhythm/u6a84!u5e1du56fdu83efu6483u56e3_easy"
         },
         {
           "name": "NORMAL",
-          "path": "levels/rhythm/檄!帝国華撃団_normal"
+          "path": "levels/rhythm/u6a84!u5e1du56fdu83efu6483u56e3_normal"
         },
         {
           "name": "HARD",
-          "path": "levels/rhythm/檄!帝国華撃団_hard"
+          "path": "levels/rhythm/u6a84!u5e1du56fdu83efu6483u56e3_hard"
         },
         {
           "name": "ONI",
-          "path": "levels/rhythm/檄!帝国華撃団_oni"
+          "path": "levels/rhythm/u6a84!u5e1du56fdu83efu6483u56e3_oni"
         }
       ]
     }

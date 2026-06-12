@@ -129,6 +129,10 @@ export default class GameMgr extends cc.Component {
     private rhythmEffectLabel: cc.Label = null;
     private rhythmOpponentEffectLabel: cc.Label = null;
     private rhythmBlindNode: cc.Node = null;
+    private rhythmTopBlindNode: cc.Node = null;
+    private rhythmBottomBlindNode: cc.Node = null;
+    private rhythmTopRightBlindNode: cc.Node = null;
+    private rhythmBottomRightBlindNode: cc.Node = null;
     private rhythmTopHudBar: cc.Node = null;
     private rhythmBottomHudBar: cc.Node = null;
     private rhythmTopFxNode: cc.Node = null;
@@ -229,14 +233,62 @@ export default class GameMgr extends cc.Component {
             return;
         }
         const levelPath = GameData.currentLevelPath || ("levels/level" + GameData.currentLevel);
-        cc.resources.load(levelPath, cc.JsonAsset, (err, asset: cc.JsonAsset) => {
-            if (err) {
-                this.setMsg("LEVEL LOAD ERROR", levelPath);
-                cc.error(err);
+        this.loadLevelJson(levelPath);
+    }
+
+    private normalizeResourcePath(path: string): string {
+        let p = String(path || "").trim().replace(/\\/g, "/");
+        p = p.replace(/^db:\/\/assets\/resources\//, "");
+        p = p.replace(/^assets\/resources\//, "");
+        p = p.replace(/^resources\//, "");
+        p = p.replace(/^\/+/, "");
+        p = p.replace(/\.json$/i, "");
+        return p;
+    }
+
+    private cocosEscapedResourcePath(path: string): string {
+        // Imported TJA songs with Japanese file names are stored on disk as
+        // #Uxxxx chunks.  The catalog may still contain readable Unicode, and
+        // Firebase rooms can persist either format.  Try both when loading.
+        let out = "";
+        for (let i = 0; i < path.length; i++) {
+            const c = path.charCodeAt(i);
+            out += c > 127 ? ("#U" + c.toString(16).padStart(4, "0")) : path.charAt(i);
+        }
+        return out;
+    }
+
+    private resourcePathCandidates(path: string): string[] {
+        const norm = this.normalizeResourcePath(path);
+        const esc = this.cocosEscapedResourcePath(norm);
+        const arr = [norm, esc];
+        const out: string[] = [];
+        for (const p of arr) if (p && out.indexOf(p) < 0) out.push(p);
+        return out;
+    }
+
+    private loadLevelJson(path: string) {
+        const candidates = this.resourcePathCandidates(path);
+        let lastErr: any = null;
+        const tryLoad = (i: number) => {
+            if (i >= candidates.length) {
+                this.setMsg("LEVEL LOAD ERROR", candidates.join("  |  "));
+                if (lastErr) cc.error(lastErr);
                 return;
             }
-            this.startLevel(asset.json);
-        });
+            const p = candidates[i];
+            cc.resources.load(p, cc.JsonAsset, (err, asset: cc.JsonAsset) => {
+                if (err || !asset) {
+                    lastErr = err;
+                    cc.warn("level load failed: " + p, err);
+                    tryLoad(i + 1);
+                    return;
+                }
+                if (GameData.currentLevelPath) GameData.currentLevelPath = p;
+                this.startLevel(asset.json);
+            });
+        };
+        tryLoad(0);
     }
 
     private startLevel(data: any) {
@@ -468,7 +520,7 @@ export default class GameMgr extends cc.Component {
 
     private rhythmAttackName(type: string): string {
         type = this.normalizeRhythmAttackType(type);
-        if (type === "speed") return "FAST";
+        if (type === "speed") return "RIGHT BLIND";
         if (type === "swap") return "R/B SWAP";
         return "BLIND";
     }
@@ -607,8 +659,9 @@ export default class GameMgr extends cc.Component {
         } else if (this.isRhythmFightOnlineBattle()) {
             this.rhythmAttackSeq++;
             this.rhythmAttackType = type;
-            this.rhythmAttackAt = Date.now();
+            this.rhythmAttackAt = Fb.serverNow();
             this.applyOpponentRhythmInterference(type, "OPPONENT");
+            this.pushLiveNow();
         } else if (this.isRhythmAiBattle()) {
             this.rhythmAiInterfereT = Math.max(this.rhythmAiInterfereT, this.rhythmAttackDuration(type));
             this.rhythmAiInterfereType = type;
@@ -667,14 +720,25 @@ export default class GameMgr extends cc.Component {
         if (this.rhythmOppFxSwapT > 0) this.rhythmOppFxSwapT = Math.max(0, this.rhythmOppFxSwapT - dt);
         if (this.rhythmOppFxBlindT > 0) this.rhythmOppFxBlindT = Math.max(0, this.rhythmOppFxBlindT - dt);
         if (this.rhythmAiInterfereT > 0) this.rhythmAiInterfereT = Math.max(0, this.rhythmAiInterfereT - dt);
-        if (this.rhythmBlindNode) {
-            this.rhythmBlindNode.active = this.isRhythmLevel() && this.rhythmFxBlindT > 0;
-            if (this.rhythmBlindNode.active) {
-                const wiggle = Math.sin(Date.now() / 180) * 24;
-                this.rhythmBlindNode.x = wiggle;
-                this.rhythmBlindNode.opacity = 210;
-            }
+
+        // Red BLIND: keep the original cloud/blocker shape, but make every
+        // blocker fully black and opaque.  Do NOT cover the whole half-screen;
+        // yellow RIGHT BLIND is the half-screen blocker.
+        const inFightRhythm = this.isRhythmFightBattle() && this.isRhythmLevel();
+        const showTopBlind = inFightRhythm && this.rhythmOppFxBlindT > 0;
+        const showBottomBlind = inFightRhythm && this.rhythmFxBlindT > 0;
+        const showTopRightBlind = inFightRhythm && this.rhythmOppFxSpeedT > 0;
+        const showBottomRightBlind = inFightRhythm && this.rhythmFxSpeedT > 0;
+        if (this.rhythmTopBlindNode) this.rhythmTopBlindNode.active = showTopBlind;
+        if (this.rhythmBottomBlindNode) this.rhythmBottomBlindNode.active = showBottomBlind;
+        if (this.rhythmTopRightBlindNode) this.rhythmTopRightBlindNode.active = showTopRightBlind;
+        if (this.rhythmBottomRightBlindNode) this.rhythmBottomRightBlindNode.active = showBottomRightBlind;
+        // Backward-compatible alias used by older reset/clear code.
+        if (this.rhythmBlindNode && this.rhythmBlindNode !== this.rhythmBottomBlindNode) {
+            this.rhythmBlindNode.active = showBottomBlind;
+            this.rhythmBlindNode.opacity = showBottomBlind ? 255 : 0;
         }
+
         const topType = this.rhythmTopActiveEffect();
         const botType = this.rhythmBottomActiveEffect();
         if (this.rhythmTopFxNode) {
@@ -695,8 +759,10 @@ export default class GameMgr extends cc.Component {
                 this.rhythmBottomFxNode.opacity = this.rhythmAttackPulseOpacity(botType) + pulse;
             }
         }
-        this.updateRhythmFastLines(this.rhythmTopFastLines, this.isRhythmFightBattle() && this.rhythmOppFxSpeedT > 0, 0);
-        this.updateRhythmFastLines(this.rhythmBottomFastLines, this.isRhythmFightBattle() && this.rhythmFxSpeedT > 0, 710);
+        // Yellow attack is RIGHT BLIND now: the actual obstruction is the
+        // solid right-half blocker above, not the old speed-line overlay.
+        this.updateRhythmFastLines(this.rhythmTopFastLines, false, 0);
+        this.updateRhythmFastLines(this.rhythmBottomFastLines, false, 710);
         this.updateRhythmEffectHud();
         this.updateRhythmOpponentEffectHud();
     }
@@ -706,10 +772,14 @@ export default class GameMgr extends cc.Component {
         if (!this.isRhythmLevel()) {
             this.rhythmEffectLabel.string = "";
             if (this.rhythmBlindNode) this.rhythmBlindNode.active = false;
+            if (this.rhythmTopBlindNode) this.rhythmTopBlindNode.active = false;
+            if (this.rhythmBottomBlindNode) this.rhythmBottomBlindNode.active = false;
+            if (this.rhythmTopRightBlindNode) this.rhythmTopRightBlindNode.active = false;
+            if (this.rhythmBottomRightBlindNode) this.rhythmBottomRightBlindNode.active = false;
             return;
         }
         const parts: string[] = [];
-        if (this.rhythmFxSpeedT > 0) parts.push("FAST x1.6 " + this.rhythmFxSpeedT.toFixed(1));
+        if (this.rhythmFxSpeedT > 0) parts.push("RIGHT BLIND " + this.rhythmFxSpeedT.toFixed(1));
         if (this.rhythmFxSwapT > 0) parts.push("R/B SWAP " + this.rhythmFxSwapT.toFixed(1));
         if (this.rhythmFxBlindT > 0) parts.push("BLIND " + this.rhythmFxBlindT.toFixed(1));
         if (parts.length) {
@@ -730,7 +800,7 @@ export default class GameMgr extends cc.Component {
             return;
         }
         const parts: string[] = [];
-        if (this.rhythmOppFxSpeedT > 0) parts.push("FAST x1.6 " + this.rhythmOppFxSpeedT.toFixed(1));
+        if (this.rhythmOppFxSpeedT > 0) parts.push("RIGHT BLIND " + this.rhythmOppFxSpeedT.toFixed(1));
         if (this.rhythmOppFxSwapT > 0) parts.push("R/B SWAP " + this.rhythmOppFxSwapT.toFixed(1));
         if (this.rhythmOppFxBlindT > 0) parts.push("BLIND " + this.rhythmOppFxBlindT.toFixed(1));
         if (parts.length) {
@@ -803,6 +873,22 @@ export default class GameMgr extends cc.Component {
         for (const n of r.notes) {
             n.y = fy(n.y);
             if (Number.isFinite(Number(n.voidY))) n.voidY = fy(n.voidY);
+
+            // Split-screen compresses the vertical chart space.  Red jump notes
+            // that were only ~50px away from the rail could then overlap the
+            // standing player hitbox, so players could score them without
+            // jumping.  Keep blue flip notes on the rail, but push red jump
+            // notes far enough from their rail to require an actual light jump.
+            if (r.style === "jump-flip" && (n.action || "") === "jump" && r.laneYs && r.laneYs.length >= 2) {
+                const laneIdx = Math.max(0, Math.min(r.laneYs.length - 1, Number(n.trackLane) || 0));
+                const baseY = r.laneYs[laneIdx];
+                const lane = (n.lane === "ceiling" || laneIdx === 1) ? "ceiling" : "floor";
+                const dir = lane === "ceiling" ? -1 : 1;
+                const minJumpOffset = Math.max(70, Math.min(92, (Number(r.jumpHeight) || 66) + 8));
+                const curOffset = Math.abs(Number(n.y) - baseY);
+                if (curOffset < minJumpOffset) n.y = Math.round(baseY + dir * minJumpOffset);
+            }
+
             if (n.node && n.node.isValid) n.node.y = n.y;
         }
 
@@ -1025,7 +1111,12 @@ export default class GameMgr extends cc.Component {
             if (this.isRhythmFightOnlineBattle()) {
                 const atkSeq = Number(d.atkSeq) || 0;
                 const atkAt = Number(d.atkAt) || 0;
-                if (atkSeq > 0 && this.rhythmRemoteAttackSeq[e.uid] !== atkSeq && atkAt > Date.now() - 2200) {
+                // Attack events are sent as edge-triggered seq numbers.
+                // Use server-synced time and a generous window, otherwise two
+                // clients with slightly different clocks can silently drop jams.
+                if (atkSeq > 0
+                    && this.rhythmRemoteAttackSeq[e.uid] !== atkSeq
+                    && (!atkAt || atkAt > Fb.serverNow() - 7000)) {
                     this.rhythmRemoteAttackSeq[e.uid] = atkSeq;
                     this.applyRhythmInterference(this.normalizeRhythmAttackType(String(d.atkType || "blind")), d.n || "opponent");
                 }
@@ -1246,6 +1337,34 @@ export default class GameMgr extends cc.Component {
         this.rhythmTopFastLines = this.makeRhythmFastLines(this.rhythmTopFxNode);
         this.rhythmBottomFastLines = this.makeRhythmFastLines(this.rhythmBottomFxNode);
 
+        const mkRightBlind = (name: string, y: number) => {
+            const n = new cc.Node(name);
+            const sp = n.addComponent(cc.Sprite);
+            sp.spriteFrame = this.frames["white"];
+            sp.sizeMode = cc.Sprite.SizeMode.CUSTOM;
+            // HUD coordinates use about 1320px width.  A 660px rectangle
+            // centered at x=330 covers exactly the right half of the screen.
+            n.setContentSize(660, 286);
+            n.setPosition(330, y);
+            n.color = cc.color(0, 0, 0);
+            n.opacity = 255;
+            n.active = false;
+            this.hud.addChild(n, 9);
+
+            const edge = new cc.Node("rightBlindEdge");
+            const es = edge.addComponent(cc.Sprite);
+            es.spriteFrame = this.frames["white"];
+            es.sizeMode = cc.Sprite.SizeMode.CUSTOM;
+            edge.setContentSize(6, 286);
+            edge.setPosition(-330, 0);
+            edge.color = cc.color(255, 226, 90);
+            edge.opacity = 220;
+            n.addChild(edge, 1);
+            return n;
+        };
+        this.rhythmTopRightBlindNode = mkRightBlind("rhythmTopRightBlindFx", 143);
+        this.rhythmBottomRightBlindNode = mkRightBlind("rhythmBottomRightBlindFx", -143);
+
         this.nameLabel = this.makeLabel(this.hud, -620, 286, 20, cyan, 0);
         this.crystalLabel = this.makeLabel(this.hud, -40, 286, 18, white, 0.5);
         this.deathLabel = this.makeLabel(this.hud, 330, 286, 20, pink, 0.5);
@@ -1273,26 +1392,33 @@ export default class GameMgr extends cc.Component {
         this.rhythmSplitBottomLabel = this.makeLabel(this.hud, -620, -232, 13, orange, 0);
         this.rhythmSplitTopLabel.node.active = false;
         this.rhythmSplitBottomLabel.node.active = false;
-        this.rhythmBlindNode = new cc.Node("rhythmBlindFx");
-        this.rhythmBlindNode.active = false;
-        this.rhythmBlindNode.opacity = 210;
-        const blindRects = [
-            { x: -255, y: -118, w: 250, h: 64 },
-            { x: 110, y: -156, w: 310, h: 56 },
-            { x: -25, y: -206, w: 360, h: 48 }
-        ];
-        for (const r of blindRects) {
-            const b = new cc.Node("blindBar");
-            const bs = b.addComponent(cc.Sprite);
-            bs.spriteFrame = this.frames["white"];
-            bs.sizeMode = cc.Sprite.SizeMode.CUSTOM;
-            b.setContentSize(r.w, r.h);
-            b.setPosition(r.x, r.y);
-            b.color = cc.color(3, 5, 13);
-            b.opacity = 205;
-            this.rhythmBlindNode.addChild(b);
-        }
-        this.hud.addChild(this.rhythmBlindNode, 8);
+        const mkCloudBlind = (name: string, y: number, mirrorY: boolean) => {
+            const n = new cc.Node(name);
+            n.setPosition(0, y);
+            n.active = false;
+            const rects = [
+                { x: -255, y: 40, w: 250, h: 64 },
+                { x: 110, y: 0, w: 310, h: 56 },
+                { x: -25, y: -50, w: 360, h: 48 }
+            ];
+            for (const r of rects) {
+                const b = new cc.Node("blindCloudBlock");
+                const bs = b.addComponent(cc.Sprite);
+                bs.spriteFrame = this.frames["white"];
+                bs.sizeMode = cc.Sprite.SizeMode.CUSTOM;
+                b.setContentSize(r.w, r.h);
+                b.setPosition(r.x, mirrorY ? -r.y : r.y);
+                b.color = cc.color(0, 0, 0);
+                b.opacity = 255;
+                n.addChild(b);
+            }
+            this.hud.addChild(n, 8);
+            return n;
+        };
+        this.rhythmTopBlindNode = mkCloudBlind("rhythmTopBlindFx", 155, true);
+        this.rhythmBottomBlindNode = mkCloudBlind("rhythmBottomBlindFx", -155, false);
+        // Keep the old name as an alias for player-side clear logic.
+        this.rhythmBlindNode = this.rhythmBottomBlindNode;
         this.judgeLabel = this.makeLabel(this.hud, 0, -86, 34, white);
         this.judgeLabel.node.zIndex = 12;
         this.msgLabel = this.makeLabel(this.hud, 0, 40, 44, white);
@@ -1647,6 +1773,10 @@ export default class GameMgr extends cc.Component {
         this.rhythmAttackAt = 0;
         this.rhythmRemoteAttackSeq = {};
         if (this.rhythmBlindNode) this.rhythmBlindNode.active = false;
+        if (this.rhythmTopBlindNode) this.rhythmTopBlindNode.active = false;
+        if (this.rhythmBottomBlindNode) this.rhythmBottomBlindNode.active = false;
+        if (this.rhythmTopRightBlindNode) this.rhythmTopRightBlindNode.active = false;
+        if (this.rhythmBottomRightBlindNode) this.rhythmBottomRightBlindNode.active = false;
         if (this.rhythmTopFxNode) this.rhythmTopFxNode.active = false;
         if (this.rhythmBottomFxNode) this.rhythmBottomFxNode.active = false;
         this.updateRhythmFastLines(this.rhythmTopFastLines, false, 0);
@@ -2596,6 +2726,35 @@ export default class GameMgr extends cc.Component {
 
     // ---------- per-frame ----------
 
+    private currentLivePayload(me: Player): any {
+        const fight = this.isRhythmFightOnlineBattle();
+        const now = Fb.serverNow();
+        return {
+            x: Math.round(me.node.x),
+            y: Math.round(me.node.y),
+            sy: me.node.scaleY < 0 ? -1 : 1,
+            col: GameData.settings.onlineCollide ? 1 : 0,
+            sk: me.index === 0 ? (GameData.settings.skin1 || 0) : (typeof GameData.settings.skin2 === "number" ? GameData.settings.skin2 : 1),
+            room: GameData.roomCode || null,
+            lv: this.liveLevelKey(),
+            n: Fb.userName(),
+            score: this.isRhythmLevel() ? this.rhythmScore : 0,
+            combo: this.isRhythmLevel() ? this.rhythmCombo : 0,
+            mode: this.isRhythmLevel() ? "rhythm" : "runner",
+            atkSeq: fight ? this.rhythmAttackSeq : 0,
+            atkType: fight ? this.rhythmAttackType : "",
+            atkAt: fight ? this.rhythmAttackAt : 0,
+            t: now
+        };
+    }
+
+    private pushLiveNow() {
+        if (!this.liveOn || !Fb.user()) return;
+        const me = this.anyAlive();
+        if (!me) return;
+        Fb.liveSet(this.currentLivePayload(me));
+    }
+
     update(dt: number) {
         // keep HUD glued to the camera viewport
         if (this.hud && this.cameraNode) {
@@ -2653,23 +2812,7 @@ export default class GameMgr extends cc.Component {
                     this.liveAccum = 0;
                     const me = this.anyAlive();
                     if (me) {
-                        Fb.liveSet({
-                            x: Math.round(me.node.x),
-                            y: Math.round(me.node.y),
-                            sy: me.node.scaleY < 0 ? -1 : 1,
-                            col: GameData.settings.onlineCollide ? 1 : 0,
-                            sk: me.index === 0 ? (GameData.settings.skin1 || 0) : (typeof GameData.settings.skin2 === "number" ? GameData.settings.skin2 : 1),
-                            room: GameData.roomCode || null,
-                            lv: this.liveLevelKey(),
-                            n: Fb.userName(),
-                            score: this.isRhythmLevel() ? this.rhythmScore : 0,
-                            combo: this.isRhythmLevel() ? this.rhythmCombo : 0,
-                            mode: this.isRhythmLevel() ? "rhythm" : "runner",
-                            atkSeq: this.isRhythmFightOnlineBattle() ? this.rhythmAttackSeq : 0,
-                            atkType: this.isRhythmFightOnlineBattle() ? this.rhythmAttackType : "",
-                            atkAt: this.isRhythmFightOnlineBattle() ? this.rhythmAttackAt : 0,
-                            t: Date.now()
-                        });
+                        Fb.liveSet(this.currentLivePayload(me));
                     }
                 }
             }
