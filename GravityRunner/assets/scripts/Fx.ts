@@ -254,6 +254,49 @@ export default class Fx {
         p.posVar = cc.v2(8, 8);
     }
 
+    static brakeBurst(parent: cc.Node, x: number, y: number) {
+        if (!Fx.frame || !parent || !parent.isValid) return;
+        const p = Fx.ps(parent, x, y);
+        p.totalParticles = 34;
+        p.duration = 0.16;
+        p.emissionRate = 360;
+        p.life = 0.45;
+        p.lifeVar = 0.12;
+        p.startSize = 10;
+        p.startSizeVar = 4;
+        p.endSize = 2;
+        p.startColor = cc.color(160, 150, 255, 230);
+        p.endColor = cc.color(90, 220, 255, 0);
+        p.angle = 180;
+        p.angleVar = 35;
+        p.speed = 180;
+        p.speedVar = 60;
+        p.radialAccel = -160;
+        p.gravity = cc.v2(0, 0);
+        p.posVar = cc.v2(14, 10);
+    }
+
+    static slamBurst(parent: cc.Node, x: number, y: number, gravityDir: number) {
+        if (!Fx.frame || !parent || !parent.isValid) return;
+        const p = Fx.ps(parent, x, y);
+        p.totalParticles = 44;
+        p.duration = 0.12;
+        p.emissionRate = 520;
+        p.life = 0.38;
+        p.lifeVar = 0.12;
+        p.startSize = 12;
+        p.startSizeVar = 5;
+        p.endSize = 2;
+        p.startColor = cc.color(255, 181, 74, 245);
+        p.endColor = cc.color(255, 80, 80, 0);
+        p.angle = gravityDir > 0 ? 90 : 270;
+        p.angleVar = 34;
+        p.speed = 260;
+        p.speedVar = 90;
+        p.gravity = cc.v2(0, 0);
+        p.posVar = cc.v2(16, 8);
+    }
+
     static popup(parent: cc.Node, x: number, y: number, text: string, color: cc.Color) {
         if (!parent || !parent.isValid) return;
         const n = new cc.Node("popup");

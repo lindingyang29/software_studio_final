@@ -864,8 +864,16 @@ export default class GameMgr extends cc.Component {
         const p = this.players[idx];
         if (!p || !p.alive) return;
         if (kind === "dash") p.dash();
-        else if (kind === "brake") p.brake();
-        else p.slam();
+        else if (kind === "brake") {
+            p.brake();
+            Fx.brakeBurst(this.world, p.node.x - 10, p.node.y);
+            Fx.popup(this.world, p.node.x, p.node.y + 42, "BRAKE", cc.color(160, 150, 255));
+        } else {
+            p.slam();
+            const dir = p.getGravityDir();
+            Fx.slamBurst(this.world, p.node.x, p.node.y + dir * 22, dir);
+            Fx.popup(this.world, p.node.x, p.node.y + 42, "SLAM", cc.color(255, 181, 74));
+        }
     }
 
     private rhythmKeyName(code: number): string {
