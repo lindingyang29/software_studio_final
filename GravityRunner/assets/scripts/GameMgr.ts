@@ -132,10 +132,6 @@ export default class GameMgr extends cc.Component {
     private rhythmEffectLabel: cc.Label = null;
     private rhythmOpponentEffectLabel: cc.Label = null;
     private rhythmBlindNode: cc.Node = null;
-    private rhythmTopBlindNode: cc.Node = null;
-    private rhythmBottomBlindNode: cc.Node = null;
-    private rhythmTopRightBlindNode: cc.Node = null;
-    private rhythmBottomRightBlindNode: cc.Node = null;
     private rhythmTopHudBar: cc.Node = null;
     private rhythmBottomHudBar: cc.Node = null;
     private rhythmTopFxNode: cc.Node = null;
@@ -523,7 +519,7 @@ export default class GameMgr extends cc.Component {
 
     private rhythmAttackName(type: string): string {
         type = this.normalizeRhythmAttackType(type);
-        if (type === "speed") return "RIGHT BLIND";
+        if (type === "speed") return "FAST";
         if (type === "swap") return "R/B SWAP";
         return "BLIND";
     }
@@ -723,25 +719,14 @@ export default class GameMgr extends cc.Component {
         if (this.rhythmOppFxSwapT > 0) this.rhythmOppFxSwapT = Math.max(0, this.rhythmOppFxSwapT - dt);
         if (this.rhythmOppFxBlindT > 0) this.rhythmOppFxBlindT = Math.max(0, this.rhythmOppFxBlindT - dt);
         if (this.rhythmAiInterfereT > 0) this.rhythmAiInterfereT = Math.max(0, this.rhythmAiInterfereT - dt);
-
-        // Red BLIND: keep the original cloud/blocker shape, but make every
-        // blocker fully black and opaque.  Do NOT cover the whole half-screen;
-        // yellow RIGHT BLIND is the half-screen blocker.
-        const inFightRhythm = this.isRhythmFightBattle() && this.isRhythmLevel();
-        const showTopBlind = inFightRhythm && this.rhythmOppFxBlindT > 0;
-        const showBottomBlind = inFightRhythm && this.rhythmFxBlindT > 0;
-        const showTopRightBlind = inFightRhythm && this.rhythmOppFxSpeedT > 0;
-        const showBottomRightBlind = inFightRhythm && this.rhythmFxSpeedT > 0;
-        if (this.rhythmTopBlindNode) this.rhythmTopBlindNode.active = showTopBlind;
-        if (this.rhythmBottomBlindNode) this.rhythmBottomBlindNode.active = showBottomBlind;
-        if (this.rhythmTopRightBlindNode) this.rhythmTopRightBlindNode.active = showTopRightBlind;
-        if (this.rhythmBottomRightBlindNode) this.rhythmBottomRightBlindNode.active = showBottomRightBlind;
-        // Backward-compatible alias used by older reset/clear code.
-        if (this.rhythmBlindNode && this.rhythmBlindNode !== this.rhythmBottomBlindNode) {
-            this.rhythmBlindNode.active = showBottomBlind;
-            this.rhythmBlindNode.opacity = showBottomBlind ? 255 : 0;
+        if (this.rhythmBlindNode) {
+            this.rhythmBlindNode.active = this.isRhythmLevel() && this.rhythmFxBlindT > 0;
+            if (this.rhythmBlindNode.active) {
+                const wiggle = Math.sin(Date.now() / 180) * 24;
+                this.rhythmBlindNode.x = wiggle;
+                this.rhythmBlindNode.opacity = 210;
+            }
         }
-
         const topType = this.rhythmTopActiveEffect();
         const botType = this.rhythmBottomActiveEffect();
         if (this.rhythmTopFxNode) {
@@ -762,10 +747,8 @@ export default class GameMgr extends cc.Component {
                 this.rhythmBottomFxNode.opacity = this.rhythmAttackPulseOpacity(botType) + pulse;
             }
         }
-        // Yellow attack is RIGHT BLIND now: the actual obstruction is the
-        // solid right-half blocker above, not the old speed-line overlay.
-        this.updateRhythmFastLines(this.rhythmTopFastLines, false, 0);
-        this.updateRhythmFastLines(this.rhythmBottomFastLines, false, 710);
+        this.updateRhythmFastLines(this.rhythmTopFastLines, this.isRhythmFightBattle() && this.rhythmOppFxSpeedT > 0, 0);
+        this.updateRhythmFastLines(this.rhythmBottomFastLines, this.isRhythmFightBattle() && this.rhythmFxSpeedT > 0, 710);
         this.updateRhythmEffectHud();
         this.updateRhythmOpponentEffectHud();
     }
@@ -775,14 +758,10 @@ export default class GameMgr extends cc.Component {
         if (!this.isRhythmLevel()) {
             this.rhythmEffectLabel.string = "";
             if (this.rhythmBlindNode) this.rhythmBlindNode.active = false;
-            if (this.rhythmTopBlindNode) this.rhythmTopBlindNode.active = false;
-            if (this.rhythmBottomBlindNode) this.rhythmBottomBlindNode.active = false;
-            if (this.rhythmTopRightBlindNode) this.rhythmTopRightBlindNode.active = false;
-            if (this.rhythmBottomRightBlindNode) this.rhythmBottomRightBlindNode.active = false;
             return;
         }
         const parts: string[] = [];
-        if (this.rhythmFxSpeedT > 0) parts.push("RIGHT BLIND " + this.rhythmFxSpeedT.toFixed(1));
+        if (this.rhythmFxSpeedT > 0) parts.push("FAST x1.6 " + this.rhythmFxSpeedT.toFixed(1));
         if (this.rhythmFxSwapT > 0) parts.push("R/B SWAP " + this.rhythmFxSwapT.toFixed(1));
         if (this.rhythmFxBlindT > 0) parts.push("BLIND " + this.rhythmFxBlindT.toFixed(1));
         if (parts.length) {
@@ -803,7 +782,7 @@ export default class GameMgr extends cc.Component {
             return;
         }
         const parts: string[] = [];
-        if (this.rhythmOppFxSpeedT > 0) parts.push("RIGHT BLIND " + this.rhythmOppFxSpeedT.toFixed(1));
+        if (this.rhythmOppFxSpeedT > 0) parts.push("FAST x1.6 " + this.rhythmOppFxSpeedT.toFixed(1));
         if (this.rhythmOppFxSwapT > 0) parts.push("R/B SWAP " + this.rhythmOppFxSwapT.toFixed(1));
         if (this.rhythmOppFxBlindT > 0) parts.push("BLIND " + this.rhythmOppFxBlindT.toFixed(1));
         if (parts.length) {
@@ -839,12 +818,12 @@ export default class GameMgr extends cc.Component {
         const floorY0 = Number(r.floorY) || -140;
         const ceilingY0 = Number(r.ceilingY) || 140;
         const gap = Math.max(1, Math.abs(ceilingY0 - floorY0));
-        // VS/FIGHT needs enough vertical separation.  If the two tracks are too
-        // compressed, a small jump on one rail can touch the opposite rail's red
-        // note.  Keep the tracks closer than solo, but leave a real neutral gap.
-        this.rhythmSplitYScale = Math.min(0.78, 230 / gap);
-        this.rhythmSplitPlayerOffset = -150;
-        this.rhythmSplitOpponentOffset = 150;
+        // For VS modes, squeeze both tracks closer to the center so HUD text
+        // and edge decorations do not cover important notes near the top/bottom.
+        // This keeps a clearer neutral area around the middle divider.
+        this.rhythmSplitYScale = Math.min(0.82, 220 / gap);
+        this.rhythmSplitPlayerOffset = -130;
+        this.rhythmSplitOpponentOffset = 130;
         this.rhythmSplitBattle = true;
 
         const fy = (y: number) => this.rhythmSplitYFromOriginal(Number(y) || 0, "player");
@@ -876,22 +855,6 @@ export default class GameMgr extends cc.Component {
         for (const n of r.notes) {
             n.y = fy(n.y);
             if (Number.isFinite(Number(n.voidY))) n.voidY = fy(n.voidY);
-
-            // Split-screen compresses the vertical chart space.  Red jump notes
-            // that were only ~50px away from the rail could then overlap the
-            // standing player hitbox, so players could score them without
-            // jumping.  Keep blue flip notes on the rail, but push red jump
-            // notes far enough from their rail to require an actual light jump.
-            if (r.style === "jump-flip" && (n.action || "") === "jump" && r.laneYs && r.laneYs.length >= 2) {
-                const laneIdx = Math.max(0, Math.min(r.laneYs.length - 1, Number(n.trackLane) || 0));
-                const baseY = r.laneYs[laneIdx];
-                const lane = (n.lane === "ceiling" || laneIdx === 1) ? "ceiling" : "floor";
-                const dir = lane === "ceiling" ? -1 : 1;
-                const minJumpOffset = Math.max(70, Math.min(92, (Number(r.jumpHeight) || 66) + 8));
-                const curOffset = Math.abs(Number(n.y) - baseY);
-                if (curOffset < minJumpOffset) n.y = Math.round(baseY + dir * minJumpOffset);
-            }
-
             if (n.node && n.node.isValid) n.node.y = n.y;
         }
 
@@ -1057,7 +1020,7 @@ export default class GameMgr extends cc.Component {
 
     private onLiveEntries(entries: { uid: string; d: any }[]) {
         if (!this.world || !this.world.isValid) return;
-        const now = Date.now();
+        const now = Fb.serverNow();
         const seen: { [uid: string]: boolean } = {};
         for (const e of entries) {
             if (e.uid === Fb.uid()) continue;
@@ -1069,7 +1032,7 @@ export default class GameMgr extends cc.Component {
                 if (d.room) continue;                         // private racers hidden
                 if (d.lv !== this.liveLevelKey()) continue;   // other mode/level
             }
-            if (!d.t || now - d.t > 7000) continue;       // stale
+            if (!d.t || Math.abs(now - d.t) > 12000) continue;       // stale; use server time so host/guest clocks do not hide ghosts
             seen[e.uid] = true;
             let g = this.ghosts[e.uid];
             if (!g) {
@@ -1336,34 +1299,6 @@ export default class GameMgr extends cc.Component {
         this.rhythmTopFastLines = this.makeRhythmFastLines(this.rhythmTopFxNode);
         this.rhythmBottomFastLines = this.makeRhythmFastLines(this.rhythmBottomFxNode);
 
-        const mkRightBlind = (name: string, y: number) => {
-            const n = new cc.Node(name);
-            const sp = n.addComponent(cc.Sprite);
-            sp.spriteFrame = this.frames["white"];
-            sp.sizeMode = cc.Sprite.SizeMode.CUSTOM;
-            // HUD coordinates use about 1320px width.  A 660px rectangle
-            // centered at x=330 covers exactly the right half of the screen.
-            n.setContentSize(660, 286);
-            n.setPosition(330, y);
-            n.color = cc.color(0, 0, 0);
-            n.opacity = 255;
-            n.active = false;
-            this.hud.addChild(n, 9);
-
-            const edge = new cc.Node("rightBlindEdge");
-            const es = edge.addComponent(cc.Sprite);
-            es.spriteFrame = this.frames["white"];
-            es.sizeMode = cc.Sprite.SizeMode.CUSTOM;
-            edge.setContentSize(6, 286);
-            edge.setPosition(-330, 0);
-            edge.color = cc.color(255, 226, 90);
-            edge.opacity = 220;
-            n.addChild(edge, 1);
-            return n;
-        };
-        this.rhythmTopRightBlindNode = mkRightBlind("rhythmTopRightBlindFx", 143);
-        this.rhythmBottomRightBlindNode = mkRightBlind("rhythmBottomRightBlindFx", -143);
-
         this.nameLabel = this.makeLabel(this.hud, -620, 286, 20, cyan, 0);
         this.crystalLabel = this.makeLabel(this.hud, -40, 286, 18, white, 0.5);
         this.deathLabel = this.makeLabel(this.hud, 330, 286, 20, pink, 0.5);
@@ -1391,33 +1326,26 @@ export default class GameMgr extends cc.Component {
         this.rhythmSplitBottomLabel = this.makeLabel(this.hud, -620, -232, 13, orange, 0);
         this.rhythmSplitTopLabel.node.active = false;
         this.rhythmSplitBottomLabel.node.active = false;
-        const mkCloudBlind = (name: string, y: number, mirrorY: boolean) => {
-            const n = new cc.Node(name);
-            n.setPosition(0, y);
-            n.active = false;
-            const rects = [
-                { x: -255, y: 40, w: 250, h: 64 },
-                { x: 110, y: 0, w: 310, h: 56 },
-                { x: -25, y: -50, w: 360, h: 48 }
-            ];
-            for (const r of rects) {
-                const b = new cc.Node("blindCloudBlock");
-                const bs = b.addComponent(cc.Sprite);
-                bs.spriteFrame = this.frames["white"];
-                bs.sizeMode = cc.Sprite.SizeMode.CUSTOM;
-                b.setContentSize(r.w, r.h);
-                b.setPosition(r.x, mirrorY ? -r.y : r.y);
-                b.color = cc.color(0, 0, 0);
-                b.opacity = 255;
-                n.addChild(b);
-            }
-            this.hud.addChild(n, 8);
-            return n;
-        };
-        this.rhythmTopBlindNode = mkCloudBlind("rhythmTopBlindFx", 155, true);
-        this.rhythmBottomBlindNode = mkCloudBlind("rhythmBottomBlindFx", -155, false);
-        // Keep the old name as an alias for player-side clear logic.
-        this.rhythmBlindNode = this.rhythmBottomBlindNode;
+        this.rhythmBlindNode = new cc.Node("rhythmBlindFx");
+        this.rhythmBlindNode.active = false;
+        this.rhythmBlindNode.opacity = 210;
+        const blindRects = [
+            { x: -255, y: -118, w: 250, h: 64 },
+            { x: 110, y: -156, w: 310, h: 56 },
+            { x: -25, y: -206, w: 360, h: 48 }
+        ];
+        for (const r of blindRects) {
+            const b = new cc.Node("blindBar");
+            const bs = b.addComponent(cc.Sprite);
+            bs.spriteFrame = this.frames["white"];
+            bs.sizeMode = cc.Sprite.SizeMode.CUSTOM;
+            b.setContentSize(r.w, r.h);
+            b.setPosition(r.x, r.y);
+            b.color = cc.color(3, 5, 13);
+            b.opacity = 205;
+            this.rhythmBlindNode.addChild(b);
+        }
+        this.hud.addChild(this.rhythmBlindNode, 8);
         this.judgeLabel = this.makeLabel(this.hud, 0, -86, 34, white);
         this.judgeLabel.node.zIndex = 12;
         this.msgLabel = this.makeLabel(this.hud, 0, 40, 44, white);
@@ -1773,6 +1701,7 @@ export default class GameMgr extends cc.Component {
             }
             this.state = "run";
             this.setMsg("", "");
+            this.pushLiveNow();
         });
     }
 
@@ -1796,11 +1725,9 @@ export default class GameMgr extends cc.Component {
         this.rhythmAttackType = "";
         this.rhythmAttackAt = 0;
         this.rhythmRemoteAttackSeq = {};
+        this.rhythmSyncAccum = 0;
+        this.rhythmLastHardSync = 0;
         if (this.rhythmBlindNode) this.rhythmBlindNode.active = false;
-        if (this.rhythmTopBlindNode) this.rhythmTopBlindNode.active = false;
-        if (this.rhythmBottomBlindNode) this.rhythmBottomBlindNode.active = false;
-        if (this.rhythmTopRightBlindNode) this.rhythmTopRightBlindNode.active = false;
-        if (this.rhythmBottomRightBlindNode) this.rhythmBottomRightBlindNode.active = false;
         if (this.rhythmTopFxNode) this.rhythmTopFxNode.active = false;
         if (this.rhythmBottomFxNode) this.rhythmBottomFxNode.active = false;
         this.updateRhythmFastLines(this.rhythmTopFastLines, false, 0);
@@ -2310,23 +2237,18 @@ export default class GameMgr extends cc.Component {
         const p = this.players[0];
         if (!p || !p.alive || !note || !note.node || !note.node.isValid) return false;
 
-        // Split-screen safety: the local player may only judge the lower chart.
-        // This prevents a jump near the center line from eating the opponent's
-        // visual notes or any red note that was pushed across the divider.
-        if (this.rhythmSplitBattle && note.node.y > -8) return false;
-
-        // Red jump notes must belong to the rail the player is currently on.
-        // Blue flip notes intentionally keep pure visual collision, because the
-        // player can be changing rails during the same frame the blue note is hit.
-        if ((note.action || "") === "jump" && (p as any).getLane) {
-            const lane = (note.lane === "ceiling" || Number(note.trackLane) === 1) ? "ceiling" : "floor";
-            if ((p as any).getLane() !== lane) return false;
-        }
+        // Only judge the real lower-player chart.  Opponent notes are visual
+        // copies and live in opponentNode, so do not use a strict rail check here:
+        // it made the host miss every red/blue note after split-screen transforms.
+        // A loose upper bound is only a safety net against any accidental visual
+        // copy being placed in the shared note list.
+        if (this.rhythmSplitBattle && note.node.y > 60) return false;
 
         const dx = Math.abs(p.node.x - note.node.x);
         const dy = Math.abs(p.node.y - note.node.y);
-        const rx = note.action === "flip" ? 64 : 54;
-        const ry = note.action === "flip" ? 60 : 48;
+        const isFlip = (note.action || "") === "flip";
+        const rx = isFlip ? 66 : 58;
+        const ry = isFlip ? 62 : 52;
         return dx <= rx && dy <= ry;
     }
 
@@ -2789,10 +2711,7 @@ export default class GameMgr extends cc.Component {
         const target = Math.max(0, (Fb.serverNow() - this.rhythmServerStartT0) / 1000);
         const cur = Sfx.getMusicTime();
         const drift = target - cur;
-        // Small drifts are harmless; hard-correct larger desyncs so host and
-        // guest judge the same note windows.  Limit hard sync frequency so the
-        // music does not stutter on unstable networks.
-        if (Math.abs(drift) > 0.18 && Math.abs(target - this.rhythmLastHardSync) > 1.5) {
+        if (Math.abs(drift) > 0.22 && Math.abs(target - this.rhythmLastHardSync) > 1.6) {
             Sfx.seekMusic(target);
             this.rhythmLastHardSync = target;
         }
@@ -2846,7 +2765,7 @@ export default class GameMgr extends cc.Component {
             }
             if (this.state === "run" && Fb.user()) {
                 this.liveAccum += dt;
-                if (this.liveAccum >= 0.12) {
+                if (this.liveAccum >= 0.08) {
                     this.liveAccum = 0;
                     const me = this.anyAlive();
                     if (me) {

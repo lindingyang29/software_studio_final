@@ -1630,7 +1630,7 @@ export default class MenuCtrl extends cc.Component {
             sBtn.on(cc.Node.EventType.TOUCH_END, (e: cc.Event) => {
                 e.stopPropagation();
                 Sfx.play("power", 0.9);
-                Fb.startRoom(Fb.serverNow() + 5200);
+                Fb.startRoom(Fb.serverNow() + 5000);
             });
         }
     }
