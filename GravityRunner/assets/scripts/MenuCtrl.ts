@@ -79,6 +79,7 @@ export default class MenuCtrl extends cc.Component {
         // back in the menu: any previous room participation ends here
         GameData.roomCode = "";
         GameData.roomT0 = 0;
+        GameData.rhythmBattleMode = "solo";
         Fb.leaveRoom();
         // When cloud slot data arrives after the scene was built (e.g. right
         // after the post-login reload), the level locks / best distance shown
@@ -779,11 +780,81 @@ export default class MenuCtrl extends cc.Component {
         return panel;
     }
 
-    private rhythmLaunch(diff: any) {
+    private rhythmLaunch(diff: any, mode: string = "solo") {
         GameData.players = 1;
+        GameData.rhythmBattleMode = mode;
         GameData.currentLevelPath = diff.path || "";
         GameData.currentLevel = Number(diff.level) || 6;
+        GameData.pendingState = null;
         Fx.fadeTo("Game", this.node);
+    }
+
+    private rhythmRoomTitle(song: any, diff: any): string {
+        const title = String((song && (song.title || song.id)) || "RHYTHM");
+        const d = String((diff && diff.name) || "");
+        return d ? (title + " / " + d) : title;
+    }
+
+    private buildRhythmPlayModePanel(song: any, diff: any) {
+        this.closePanels();
+        const white = cc.color(235, 240, 255);
+        const cyan = cc.color(127, 247, 255);
+        const orange = cc.color(255, 181, 74);
+        const dim = cc.color(110, 120, 150);
+        const panel = this.buildRhythmBasePanel("RHYTHM MODE");
+        const title = this.rhythmRoomTitle(song, diff);
+        const shown = title.length > 36 ? title.substr(0, 35) + "…" : title;
+        this.label(panel, shown, 0, 160, 18, cyan);
+        this.label(panel, "Choose play style", 0, 132, 15, dim);
+
+        const status = this.label(panel, "", 0, -104, 15, orange).getComponent(cc.Label);
+        const mk = (text: string, sub: string, y: number, color: cc.Color, cb: () => void) => {
+            const b = this.sprite(panel, "white", 0, y, 360, 54, color);
+            this.sprite(b, "white", 0, -26, 360, 3, orange);
+            this.label(b, text, 0, 9, 20, white);
+            this.label(b, sub, 0, -13, 13, dim);
+            b.on(cc.Node.EventType.TOUCH_END, (e: cc.Event) => {
+                e.stopPropagation();
+                Sfx.play("click", 0.8);
+                cb();
+            });
+        };
+
+        mk("SOLO PLAY", "normal rhythm mode", 80, cc.color(80, 38, 66), () => this.rhythmLaunch(diff, "solo"));
+        mk("VS AI", "local score battle", 16, cc.color(50, 60, 105), () => this.rhythmLaunch(diff, "ai"));
+        mk("ONLINE ROOM", "create a synced Firebase room", -48, cc.color(20, 70, 40), () => {
+            if (!Fb.user()) {
+                status.string = "log in first from ACCOUNT";
+                return;
+            }
+            const path = diff.path || "";
+            if (!path) {
+                status.string = "this chart has no resource path";
+                return;
+            }
+            const code = this.genRoomCode();
+            Fb.createRoom(code, Number(diff.level) || 6, path, title);
+            this.myRoom = code;
+            this.roomIsHost = true;
+            this.roomLaunched = false;
+            if (this.rhythmPanel) { this.rhythmPanel.destroy(); this.rhythmPanel = null; }
+            this.buildRoomLobby(Number(diff.level) || 6);
+            Fb.lobbyListen((rooms, members) => this.onLobby(rooms, members));
+        });
+
+        const backBtn = this.sprite(panel, "white", -90, -190, 150, 40, cc.color(35, 45, 95));
+        this.label(backBtn, "BACK", 0, 0, 18, white);
+        backBtn.on(cc.Node.EventType.TOUCH_END, () => {
+            Sfx.play("click", 0.8);
+            this.closePanels();
+            this.buildRhythmDifficultyPanel(song);
+        });
+        const closeBtn = this.sprite(panel, "white", 90, -190, 150, 40, cc.color(50, 50, 60));
+        this.label(closeBtn, "CLOSE", 0, 0, 18, white);
+        closeBtn.on(cc.Node.EventType.TOUCH_END, () => {
+            Sfx.play("click", 0.8);
+            this.closePanels();
+        });
     }
 
     private changeRhythmGap(delta: number) {
@@ -983,7 +1054,7 @@ export default class MenuCtrl extends cc.Component {
             this.label(btn, d.name || ("DIFFICULTY " + (i + 1)), 0, 0, 18, white);
             btn.on(cc.Node.EventType.TOUCH_END, () => {
                 Sfx.play("click", 0.8);
-                this.rhythmLaunch(d);
+                this.buildRhythmPlayModePanel(song, d);
             });
         }
 
@@ -1535,12 +1606,17 @@ export default class MenuCtrl extends cc.Component {
         const dim = cc.color(110, 120, 150);
         const panel = this.roomBase("ROOM  " + this.myRoom);
 
+        let roomTitle = "";
+        for (const r of this.lastRooms) {
+            if (r.room && r.room.code === this.myRoom && r.room.title) roomTitle = String(r.room.title);
+        }
         this.label(panel, this.roomIsHost
             ? "you are the HOST — share the code, then press START"
-            : "waiting for the host to start...", 0, 170, 15, dim);
-        this.roomStatus = this.label(panel, "", 0, 140, 14, cyan).getComponent(cc.Label);
+            : "waiting for the host to start...", 0, 176, 15, dim);
+        this.label(panel, roomTitle ? ("RHYTHM  " + roomTitle) : "synced race room", 0, 150, 13, cyan);
+        this.roomStatus = this.label(panel, "", 0, 126, 14, cyan).getComponent(cc.Label);
 
-        this.label(panel, "PLAYERS", 0, 105, 16, cc.color(255, 181, 74));
+        this.label(panel, "PLAYERS", 0, 96, 16, cc.color(255, 181, 74));
         this.roomMembersBox = new cc.Node("members");
         panel.addChild(this.roomMembersBox);
         this.renderRoomMembers();
@@ -1589,9 +1665,11 @@ export default class MenuCtrl extends cc.Component {
                 GameData.roomCode = this.myRoom;
                 GameData.roomT0 = t0;
                 GameData.players = 1;
-                GameData.currentLevelPath = "";
+                const path = String(r.room.path || "");
+                GameData.currentLevelPath = path;
+                GameData.rhythmBattleMode = path ? "online" : "solo";
                 GameData.pendingState = null;
-                GameData.currentLevel = (r.room.lv === -1) ? -1 : (r.room.lv || 1);
+                GameData.currentLevel = path ? (Number(r.room.lv) || 6) : ((r.room.lv === -1) ? -1 : (r.room.lv || 1));
                 Fx.fadeTo("Game", this.node);
             }
             return;

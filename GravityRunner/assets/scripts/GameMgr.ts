@@ -59,7 +59,7 @@ export default class GameMgr extends cc.Component {
     private roomT0 = 0;
 
     // online ghosts (gvx/gvy = velocity estimate, col = remote opted in to collision)
-    private ghosts: { [uid: string]: { node: cc.Node; tx: number; ty: number; tsy: number; gvx: number; gvy: number; col: boolean; lastT: number } } = {};
+    private ghosts: { [uid: string]: { node: cc.Node; tx: number; ty: number; tsy: number; gvx: number; gvy: number; col: boolean; lastT: number; score: number; combo: number } } = {};
     private liveAccum = 0;
     private liveOn = false;
 
@@ -84,8 +84,33 @@ export default class GameMgr extends cc.Component {
     private rhythmBad = 0;
     private rhythmMiss = 0;
 
+    // local rhythm battle AI.  It does not mutate player-note judgement;
+    // it runs a parallel score track over the same chart.
+    private rhythmAiLabel: cc.Label = null;
+    private rhythmAiNode: cc.Node = null;
+    private rhythmAiIndex = 0;
+    private rhythmAiScore = 0;
+    private rhythmAiCombo = 0;
+    private rhythmAiMaxCombo = 0;
+    private rhythmAiPerfect = 0;
+    private rhythmAiGood = 0;
+    private rhythmAiBad = 0;
+    private rhythmAiMiss = 0;
+    private rhythmAiRailDir = -1;
+    private rhythmAiLaneIndex = 0;
+
     isRunning(): boolean {
         return this.state === "run";
+    }
+
+    private isRhythmAiBattle(): boolean {
+        return !!(this.level && this.level.rhythm && this.level.rhythm.enabled
+            && GameData.rhythmBattleMode === "ai");
+    }
+
+    private isRhythmOnlineBattle(): boolean {
+        return !!(this.level && this.level.rhythm && this.level.rhythm.enabled
+            && (GameData.rhythmBattleMode === "online" || !!GameData.roomCode));
     }
 
     onLoad() {
@@ -165,10 +190,13 @@ export default class GameMgr extends cc.Component {
     private startLevel(data: any) {
         this.level = LevelBuilder.build(this.world, data, this.frames);
         this.spawnPlayersAndCamera(this.level.length - 480);
+        if (this.isRhythmAiBattle()) this.spawnRhythmAi();
         this.applyRotationForX(this.level.start.x, true);
         const titlePrefix = this.isRhythmLevel() ? "RHYTHM — "
             : (GameData.currentLevel === 0 ? "CUSTOM — " : "LEVEL " + GameData.currentLevel + " — ");
         this.nameLabel.string = titlePrefix + this.level.name
+            + (this.isRhythmAiBattle() ? "   [VS AI]" : "")
+            + (this.isRhythmOnlineBattle() ? "   [ONLINE]" : "")
             + (GameData.players === 2 && !this.isRhythmLevel() ? "   [2P]" : "");
         if (this.isRhythmLevel()) {
             Sfx.stopBgm();
@@ -401,7 +429,7 @@ export default class GameMgr extends cc.Component {
                 lb.lineHeight = 14;
                 n.addChild(ln);
                 this.world.addChild(n);
-                g = this.ghosts[e.uid] = { node: n, tx: d.x, ty: d.y, tsy: 1, gvx: 0, gvy: 0, col: false, lastT: d.t || 0 };
+                g = this.ghosts[e.uid] = { node: n, tx: d.x, ty: d.y, tsy: 1, gvx: 0, gvy: 0, col: false, lastT: d.t || 0, score: d.score || 0, combo: d.combo || 0 };
             }
             // velocity estimate from consecutive network samples
             const dtNet = ((d.t || 0) - g.lastT) / 1000;
@@ -414,6 +442,13 @@ export default class GameMgr extends cc.Component {
             g.ty = d.y;
             g.tsy = d.sy || 1;
             g.col = !!d.col;
+            g.score = d.score || 0;
+            g.combo = d.combo || 0;
+            const nameNode = g.node.getChildByName("name");
+            if (nameNode) {
+                const lb = nameNode.getComponent(cc.Label);
+                if (lb) lb.string = (d.n || "ghost") + (this.isRhythmLevel() ? ("  " + (d.score || 0)) : "");
+            }
         }
         for (const uid in this.ghosts) {
             if (!seen[uid]) {
@@ -606,6 +641,7 @@ export default class GameMgr extends cc.Component {
         this.timeLabel = this.makeLabel(this.hud, 450, 284, 24, orange, 1);
         this.distLabel = this.makeLabel(this.hud, 0, 284, 26, orange);
         this.rhythmLabel = this.makeLabel(this.hud, 0, 256, 22, orange);
+        this.rhythmAiLabel = this.makeLabel(this.hud, 0, 230, 18, cyan);
         this.judgeLabel = this.makeLabel(this.hud, 0, 86, 34, white);
         this.msgLabel = this.makeLabel(this.hud, 0, 40, 44, white);
         this.subLabel = this.makeLabel(this.hud, 0, -10, 18, cyan);
@@ -730,6 +766,7 @@ export default class GameMgr extends cc.Component {
     private onRhythmButton(action: string) {
         switch (this.state) {
             case "ready":
+                if (this.roomT0 > 0) break;
                 this.startRhythmRun();
                 break;
             case "run":
@@ -937,6 +974,7 @@ export default class GameMgr extends cc.Component {
         this.rhythmGood = 0;
         this.rhythmBad = 0;
         this.rhythmMiss = 0;
+        this.resetRhythmAi(resetNodes);
         if (resetNodes && this.level && this.level.rhythm) {
             for (const n of this.level.rhythm.notes) {
                 n.judged = false;
@@ -953,13 +991,15 @@ export default class GameMgr extends cc.Component {
         if (!this.rhythmLabel) return;
         if (!this.isRhythmLevel()) {
             this.rhythmLabel.string = "";
+            if (this.rhythmAiLabel) this.rhythmAiLabel.string = "";
             if (this.judgeLabel) this.judgeLabel.string = "";
             return;
         }
-        this.rhythmLabel.string = "SCORE " + this.rhythmScore
+        this.rhythmLabel.string = "YOU  SCORE " + this.rhythmScore
             + "   COMBO " + this.rhythmCombo
             + "   HIT " + (this.rhythmPerfect + this.rhythmGood + this.rhythmBad)
             + "   MISS " + this.rhythmMiss;
+        this.updateRhythmAiHud();
     }
 
     private rhythmSummary(): string {
@@ -971,6 +1011,23 @@ export default class GameMgr extends cc.Component {
             + "    ACC " + acc.toFixed(1) + "%"
             + "    MAX COMBO " + this.rhythmMaxCombo
             + "    P/G/B/M " + this.rhythmPerfect + "/" + this.rhythmGood + "/" + this.rhythmBad + "/" + this.rhythmMiss;
+    }
+
+
+    private rhythmBattleLines(): string[] {
+        if (this.isRhythmAiBattle()) {
+            const verdict = this.rhythmScore === this.rhythmAiScore ? "DRAW"
+                : (this.rhythmScore > this.rhythmAiScore ? "YOU WIN" : "AI WINS");
+            return [
+                "AI SCORE " + this.rhythmAiScore + "    MAX COMBO " + this.rhythmAiMaxCombo
+                    + "    P/G/B/M " + this.rhythmAiPerfect + "/" + this.rhythmAiGood + "/" + this.rhythmAiBad + "/" + this.rhythmAiMiss,
+                "BATTLE RESULT   " + verdict
+            ];
+        }
+        if (this.isRhythmOnlineBattle()) {
+            return ["ROOM " + (GameData.roomCode || "ONLINE") + "    remote scores are shown above ghosts"];
+        }
+        return [];
     }
 
     private showRhythmJudge(text: string, color: cc.Color) {
@@ -993,6 +1050,164 @@ export default class GameMgr extends cc.Component {
 
     private isJumpFlipRhythm(): boolean {
         return !!(this.level && this.level.rhythm && this.level.rhythm.enabled && this.level.rhythm.style === "jump-flip");
+    }
+
+    private rhythmNoteTime(n: any): number {
+        return Number(n && (n as any).hitTime !== undefined ? (n as any).hitTime : (n ? n.time : 0));
+    }
+
+    private spawnRhythmAi() {
+        if (this.rhythmAiNode && this.rhythmAiNode.isValid) return;
+        const n = new cc.Node("RhythmAI");
+        const sp = n.addComponent(cc.Sprite);
+        sp.spriteFrame = this.frames["player2"] || this.frames["player"];
+        sp.sizeMode = cc.Sprite.SizeMode.CUSTOM;
+        n.setContentSize(36, 36);
+        n.opacity = 205;
+        n.color = cc.color(255, 210, 130);
+        const name = new cc.Node("aiName");
+        name.setPosition(0, 34);
+        name.color = cc.color(255, 230, 150);
+        const lb = name.addComponent(cc.Label);
+        lb.string = "AI";
+        lb.fontSize = 12;
+        lb.lineHeight = 14;
+        n.addChild(name);
+        this.world.addChild(n, 4);
+        this.rhythmAiNode = n;
+        this.resetRhythmAi(true);
+    }
+
+    private resetRhythmAi(resetNode: boolean) {
+        this.rhythmAiIndex = 0;
+        this.rhythmAiScore = 0;
+        this.rhythmAiCombo = 0;
+        this.rhythmAiMaxCombo = 0;
+        this.rhythmAiPerfect = 0;
+        this.rhythmAiGood = 0;
+        this.rhythmAiBad = 0;
+        this.rhythmAiMiss = 0;
+        this.rhythmAiRailDir = -1;
+        this.rhythmAiLaneIndex = 0;
+        if (resetNode && this.isRhythmAiBattle()) {
+            this.spawnRhythmAi();
+            if (this.rhythmAiNode && this.level) {
+                const r = this.level.rhythm;
+                let y = this.level.start.y;
+                if (r && r.enabled && r.style === "jump-flip") y = (r.floorY || -240) + 18;
+                if (r && r.enabled && r.style === "gravity-collect") {
+                    const ys = r.laneYs && r.laneYs.length ? r.laneYs : [-212, -106, 0, 106, 212];
+                    y = ys[Math.max(0, Math.min(ys.length - 1, r.startLane || 0))];
+                }
+                this.rhythmAiNode.setPosition(this.level.start.x - 72, y);
+                this.rhythmAiNode.scaleX = 1;
+                this.rhythmAiNode.scaleY = 1;
+                this.rhythmAiNode.active = true;
+                this.rhythmAiNode.opacity = 205;
+            }
+        } else if (this.rhythmAiNode) {
+            this.rhythmAiNode.active = false;
+        }
+        this.updateRhythmAiHud();
+    }
+
+    private updateRhythmAiHud() {
+        if (!this.rhythmAiLabel) return;
+        if (this.isRhythmAiBattle()) {
+            const lead = this.rhythmScore - this.rhythmAiScore;
+            this.rhythmAiLabel.string = "AI   SCORE " + this.rhythmAiScore
+                + "   COMBO " + this.rhythmAiCombo
+                + "   DIFF " + (lead >= 0 ? "+" : "") + lead;
+        } else if (this.isRhythmOnlineBattle()) {
+            this.rhythmAiLabel.string = "ONLINE ROOM " + (GameData.roomCode || "") + "   scores shown on ghosts";
+        } else {
+            this.rhythmAiLabel.string = "";
+        }
+    }
+
+    private rhythmAiRand(i: number): number {
+        const x = Math.sin((i + 1) * 12.9898 + 78.233) * 43758.5453;
+        return x - Math.floor(x);
+    }
+
+    private rhythmAiJudge(i: number): string {
+        const r = this.rhythmAiRand(i);
+        // Strong, but intentionally beatable: roughly 58/27/10/5.
+        if (r < 0.58) return "perfect";
+        if (r < 0.85) return "good";
+        if (r < 0.95) return "bad";
+        return "miss";
+    }
+
+    private moveRhythmAiForNote(note: any) {
+        if (!this.rhythmAiNode || !this.rhythmAiNode.isValid || !this.level || !this.level.rhythm) return;
+        const r = this.level.rhythm;
+        if (r.style === "gravity-collect") {
+            const ys = r.laneYs && r.laneYs.length ? r.laneYs : [-212, -106, 0, 106, 212];
+            this.rhythmAiLaneIndex = Math.max(0, Math.min(ys.length - 1, note.trackLane || 0));
+            cc.tween(this.rhythmAiNode).to(0.07, { y: ys[this.rhythmAiLaneIndex] }, { easing: "sineOut" }).start();
+            return;
+        }
+        if (r.style === "jump-flip") {
+            if ((note.action || "") === "flip") this.rhythmAiRailDir *= -1;
+            const railY = this.rhythmAiRailDir > 0 ? ((r.ceilingY || 240) - 18) : ((r.floorY || -240) + 18);
+            this.rhythmAiNode.scaleY = this.rhythmAiRailDir > 0 ? -1 : 1;
+            if ((note.action || "") === "jump") {
+                const peak = railY - this.rhythmAiRailDir * (r.jumpHeight || 62);
+                this.rhythmAiNode.stopAllActions();
+                cc.tween(this.rhythmAiNode)
+                    .to(0.035, { y: peak }, { easing: "sineOut" })
+                    .to(0.065, { y: railY }, { easing: "sineIn" })
+                    .start();
+            } else {
+                this.rhythmAiNode.stopAllActions();
+                cc.tween(this.rhythmAiNode).to(0.08, { y: railY, angle: this.rhythmAiNode.angle + 120 }, { easing: "sineOut" }).start();
+            }
+        }
+    }
+
+    private applyRhythmAiJudgement(note: any, judgement: string, index: number) {
+        if (judgement === "perfect") {
+            this.rhythmAiPerfect++;
+            this.rhythmAiCombo++;
+            this.rhythmAiScore += 1000 + this.rhythmAiCombo * 2;
+        } else if (judgement === "good") {
+            this.rhythmAiGood++;
+            this.rhythmAiCombo++;
+            this.rhythmAiScore += 650 + this.rhythmAiCombo;
+        } else if (judgement === "bad") {
+            this.rhythmAiBad++;
+            this.rhythmAiCombo = 0;
+            this.rhythmAiScore += 250;
+        } else {
+            this.rhythmAiMiss++;
+            this.rhythmAiCombo = 0;
+        }
+        if (this.rhythmAiCombo > this.rhythmAiMaxCombo) this.rhythmAiMaxCombo = this.rhythmAiCombo;
+        if (judgement !== "miss") this.moveRhythmAiForNote(note);
+        this.updateRhythmAiHud();
+    }
+
+    private updateRhythmAi(dt: number) {
+        if (!this.isRhythmAiBattle() || !this.level || !this.level.rhythm) return;
+        if (!this.rhythmAiNode || !this.rhythmAiNode.isValid) this.spawnRhythmAi();
+        const r = this.level.rhythm;
+        const t = Sfx.getMusicTime();
+        const lead = this.players[0];
+        if (this.rhythmAiNode && lead && lead.node && lead.node.isValid) {
+            const targetX = lead.node.x - 78;
+            const k = Math.min(1, 8 * dt);
+            this.rhythmAiNode.x += (targetX - this.rhythmAiNode.x) * k;
+        }
+        while (this.rhythmAiIndex < r.notes.length) {
+            const idx = this.rhythmAiIndex;
+            const n = r.notes[idx];
+            const hitTime = this.rhythmNoteTime(n);
+            if (t < hitTime + 0.015) break;
+            const judgement = this.rhythmAiJudge(idx);
+            this.applyRhythmAiJudgement(n, judgement, idx);
+            this.rhythmAiIndex++;
+        }
     }
 
     private advanceRhythmIndex() {
@@ -1372,7 +1587,7 @@ export default class GameMgr extends cc.Component {
                 return;
             }
             const lines = this.isRhythmLevel()
-                ? [this.rhythmSummary(), "TIME   " + this.formatTime(this.time), "HEALTH   0 / " + this.maxHealth]
+                ? [this.rhythmSummary()].concat(this.rhythmBattleLines()).concat(["TIME   " + this.formatTime(this.time), "HEALTH   0 / " + this.maxHealth])
                 : [
                     "CRYSTALS   " + this.crystalsTaken + " / " + this.level.totalCrystals,
                     "TIME   " + this.formatTime(this.time),
@@ -1466,7 +1681,7 @@ export default class GameMgr extends cc.Component {
         const last = pathLevel || rhythm || (!custom && GameData.currentLevel >= GameData.MAX_LEVEL);
         this.setMsg("", "");
         const lines = rhythm
-            ? [this.rhythmSummary(), "TIME   " + this.formatTime(this.time)]
+            ? [this.rhythmSummary()].concat(this.rhythmBattleLines()).concat(["TIME   " + this.formatTime(this.time)])
             : [
                 "CRYSTALS   " + this.crystalsTaken + " / " + this.level.totalCrystals,
                 "TIME   " + this.formatTime(this.time),
@@ -1530,9 +1745,13 @@ export default class GameMgr extends cc.Component {
             const remain = (this.roomT0 - Fb.serverNow()) / 1000;
             if (remain <= 0) {
                 this.roomT0 = 0;
-                this.state = "run";
-                this.setMsg("", "");
-                Sfx.play("power", 0.9);
+                if (this.isRhythmLevel()) {
+                    this.startRhythmRun();
+                } else {
+                    this.state = "run";
+                    this.setMsg("", "");
+                    Sfx.play("power", 0.9);
+                }
             } else {
                 this.msgLabel.string = remain <= 3 ? remain.toFixed(1) : "GET READY";
             }
@@ -1562,6 +1781,9 @@ export default class GameMgr extends cc.Component {
                             room: GameData.roomCode || null,
                             lv: this.liveLevelKey(),
                             n: Fb.userName(),
+                            score: this.isRhythmLevel() ? this.rhythmScore : 0,
+                            combo: this.isRhythmLevel() ? this.rhythmCombo : 0,
+                            mode: this.isRhythmLevel() ? "rhythm" : "runner",
                             t: Date.now()
                         });
                     }
@@ -1581,7 +1803,10 @@ export default class GameMgr extends cc.Component {
 
         this.time += dt;
         this.timeLabel.string = this.formatTime(this.time);
-        if (this.isRhythmLevel()) this.updateRhythm();
+        if (this.isRhythmLevel()) {
+            this.updateRhythm();
+            this.updateRhythmAi(dt);
+        }
 
         // endless: ramp speed, track distance, stream chunks ahead / drop behind
         if (this.endless) {
