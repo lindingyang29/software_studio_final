@@ -37,6 +37,7 @@ export default class GameData {
     // solo  = normal one-player rhythm
     // ai    = local score battle against an automated opponent
     // online= Firebase room race; remote players appear as score ghosts
+    // fight-ai / fight-online = score battle plus attack notes and temporary jams
     static rhythmBattleMode: string = "solo";
 
     static readonly CUSTOM_KEY = "gfr_custom_level";

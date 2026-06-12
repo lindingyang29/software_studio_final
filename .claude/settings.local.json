@@ -42,7 +42,8 @@
       "PowerShell(Remove-Item *)",
       "PowerShell(node -e \"const l = require\\('C:/Users/lindi/Desktop/claude_code_and_codex/software_final_project/GravityRunner/assets/resources/levels/rhythm/千本桜_easy.json'\\); console.log\\('top keys:', Object.keys\\(l\\).join\\(','\\)\\); if \\(l.rhythm\\) console.log\\('rhythm keys:', Object.keys\\(l.rhythm\\).join\\(','\\)\\); if \\(l.rhythm\\) console.log\\('musicName-ish:', l.rhythm.musicName || l.rhythm.song || l.rhythm.audio || l.rhythm.music\\);\"; Set-Location \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\"; Write-Output \"=== staged status summary ===\"; \\(git status --porcelain | Measure-Object -Line\\).Lines; git status --porcelain | Select-String \"^.D|^D\" | Measure-Object | Select-Object Count)",
       "PowerShell(git *)",
-      "PowerShell(Select-String -Path \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\GravityRunner\\\\assets\\\\scripts\\\\GameMgr.ts\" -Pattern \"win animation\" -Context 1,10 | ForEach-Object { $_.Context.PreContext; $_.Line; $_.Context.PostContext })"
+      "PowerShell(Select-String -Path \"C:\\\\Users\\\\lindi\\\\Desktop\\\\claude_code_and_codex\\\\software_final_project\\\\GravityRunner\\\\assets\\\\scripts\\\\GameMgr.ts\" -Pattern \"win animation\" -Context 1,10 | ForEach-Object { $_.Context.PreContext; $_.Line; $_.Context.PostContext })",
+      "PowerShell(git ls-tree *)"
     ]
   }
 }
