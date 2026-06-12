@@ -28,6 +28,7 @@ export default class GameMgr extends cc.Component {
     private world: cc.Node = null;
     private hud: cc.Node = null;
     private players: Player[] = [];
+    private brakeFxReadyAt: number[] = [0, 0];
     private level: LevelData = null;
     private frames: { [k: string]: cc.SpriteFrame } = {};
     private pixelFont: cc.BitmapFont = null;
@@ -878,7 +879,11 @@ export default class GameMgr extends cc.Component {
         if (!p || !p.alive) return;
         if (kind === "dash") p.dash();
         else if (kind === "brake") {
+            const now = Date.now();
+            if (now < (this.brakeFxReadyAt[idx] || 0)) return;
+            this.brakeFxReadyAt[idx] = now + 2500;
             p.brake();
+            p.node.x -= 25;
             Fx.brakeBurst(this.world, p.node.x - 10, p.node.y);
             Fx.popup(this.world, p.node.x, p.node.y + 42, "BRAKE", cc.color(160, 150, 255));
         } else {
