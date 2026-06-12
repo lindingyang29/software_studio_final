@@ -1791,6 +1791,9 @@ export default class MenuCtrl extends cc.Component {
         panel.zIndex = 80;
         panel.on(cc.Node.EventType.TOUCH_START, (e: cc.Event) => e.stopPropagation());
         this.customRoomPanel = panel;
+        // the room-code input is a DOM element floating above the canvas, so
+        // this panel can't cover it — hide it while the map picker is open
+        if (this.roomCodeInput) this.roomCodeInput.style.display = "none";
 
         this.label(panel, "CUSTOM ROOM MAP", 0, 126, 24, orange);
         this.label(panel, "choose an editor save slot for this room", 0, 96, 13, dim);
@@ -1827,6 +1830,8 @@ export default class MenuCtrl extends cc.Component {
                 this.customRoomPanel.destroy();
                 this.customRoomPanel = null;
             }
+            // back to the room panel underneath — bring its code input back
+            if (this.roomCodeInput) this.roomCodeInput.style.display = "";
         });
     }
 

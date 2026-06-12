@@ -1020,17 +1020,17 @@ export default class GameMgr extends cc.Component {
         if (this.rhythmOpponentEffectLabel) this.rhythmOpponentEffectLabel.node.setPosition(0, split ? 228 : 198);
         if (this.judgeLabel) this.judgeLabel.node.y = split ? -86 : 86;
         // all rows must fit the 960px design width (visible x is +-480).
-        // rhythm: song title centered up top, NOTES left / HEALTH right on the
-        // row below (sharing the score line's y). other modes: single top row.
-        const rhythm = this.isRhythmLevel();
+        // every mode: title centered up top with TIME at the right, then
+        // CRYSTALS/NOTES left and DEATHS/HEALTH right on the row below
+        // (rhythm's score line shares that row in the center).
         if (this.nameLabel) {
-            this.nameLabel.node.setPosition(rhythm ? 0 : -472, 286);
-            this.nameLabel.node.anchorX = rhythm ? 0.5 : 0;
+            this.nameLabel.node.setPosition(0, 286);
+            this.nameLabel.node.anchorX = 0.5;
         }
-        if (this.crystalLabel) this.crystalLabel.node.setPosition(rhythm ? -472 : -210, rhythm ? 256 : 286);
+        if (this.crystalLabel) this.crystalLabel.node.setPosition(-472, 256);
         if (this.deathLabel) {
-            this.deathLabel.node.setPosition(rhythm ? 450 : 80, rhythm ? 256 : 286);
-            this.deathLabel.node.anchorX = rhythm ? 1 : 0;
+            this.deathLabel.node.setPosition(450, 256);
+            this.deathLabel.node.anchorX = 1;
         }
         if (this.timeLabel) this.timeLabel.node.setPosition(450, 286);
         if (this.distLabel) this.distLabel.node.setPosition(0, -286);
@@ -1391,10 +1391,11 @@ export default class GameMgr extends cc.Component {
         this.rhythmTopRightBlindNode = mkRightBlind("rhythmTopRightBlindFx", 143);
         this.rhythmBottomRightBlindNode = mkRightBlind("rhythmBottomRightBlindFx", -143);
 
-        // top row must fit the 960px design width (visible x is +-480)
-        this.nameLabel = this.makeLabel(this.hud, -472, 286, 20, cyan, 0);
-        this.crystalLabel = this.makeLabel(this.hud, -210, 286, 18, white, 0);
-        this.deathLabel = this.makeLabel(this.hud, 80, 286, 18, pink, 0);
+        // initial positions match applyRhythmHudLayout (title centered,
+        // counters on the second row) so the first frame doesn't jump
+        this.nameLabel = this.makeLabel(this.hud, 0, 286, 20, cyan, 0.5);
+        this.crystalLabel = this.makeLabel(this.hud, -472, 256, 18, white, 0);
+        this.deathLabel = this.makeLabel(this.hud, 450, 256, 18, pink, 1);
         this.timeLabel = this.makeLabel(this.hud, 450, 286, 22, orange, 1);
         // endless distance readout lives bottom-center, away from the top row
         this.distLabel = this.makeLabel(this.hud, 0, -286, 24, orange);
