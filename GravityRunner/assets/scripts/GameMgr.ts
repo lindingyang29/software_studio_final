@@ -873,6 +873,22 @@ export default class GameMgr extends cc.Component {
         for (const n of r.notes) {
             n.y = fy(n.y);
             if (Number.isFinite(Number(n.voidY))) n.voidY = fy(n.voidY);
+
+            // Split-screen compresses the vertical chart space.  Red jump notes
+            // that were only ~50px away from the rail could then overlap the
+            // standing player hitbox, so players could score them without
+            // jumping.  Keep blue flip notes on the rail, but push red jump
+            // notes far enough from their rail to require an actual light jump.
+            if (r.style === "jump-flip" && (n.action || "") === "jump" && r.laneYs && r.laneYs.length >= 2) {
+                const laneIdx = Math.max(0, Math.min(r.laneYs.length - 1, Number(n.trackLane) || 0));
+                const baseY = r.laneYs[laneIdx];
+                const lane = (n.lane === "ceiling" || laneIdx === 1) ? "ceiling" : "floor";
+                const dir = lane === "ceiling" ? -1 : 1;
+                const minJumpOffset = Math.max(70, Math.min(92, (Number(r.jumpHeight) || 66) + 8));
+                const curOffset = Math.abs(Number(n.y) - baseY);
+                if (curOffset < minJumpOffset) n.y = Math.round(baseY + dir * minJumpOffset);
+            }
+
             if (n.node && n.node.isValid) n.node.y = n.y;
         }
 
