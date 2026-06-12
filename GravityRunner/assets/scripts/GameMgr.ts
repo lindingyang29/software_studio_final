@@ -109,6 +109,9 @@ export default class GameMgr extends cc.Component {
     private rhythmAiMiss = 0;
     private rhythmAiRailDir = -1;
     private rhythmAiLaneIndex = 0;
+    private rhythmAiRollIndex = 0;
+    private rhythmAiRollNextTap = 0;
+    private rhythmAiRollFlipSide = false;
 
     isRunning(): boolean {
         return this.state === "run";
@@ -499,6 +502,22 @@ export default class GameMgr extends cc.Component {
             const h = 58;
             this.makeWorldRect("opponentFloor", baseX, floorY - h / 2, lx + 900, h, railColor, 125, 1);
             this.makeWorldRect("opponentCeiling", baseX, ceilY + h / 2, lx + 900, h, railColor, 125, 1);
+
+            const rolls: any[] = (r as any).rolls || [];
+            const centerY = (this.rhythmOpponentYFromPlayerY(laneYs[0]) + this.rhythmOpponentYFromPlayerY(laneYs[laneYs.length - 1])) / 2;
+            const rollH = Math.max(26, Math.abs(this.rhythmOpponentYFromPlayerY(laneYs[laneYs.length - 1]) - this.rhythmOpponentYFromPlayerY(laneYs[0])) + 28);
+            for (const rr of rolls) {
+                const x1 = Number.isFinite(Number(rr.x1)) ? Number(rr.x1) : sx + Number(rr.start || 0) * (this.level.speed || 300);
+                const x2 = Number.isFinite(Number(rr.x2)) ? Number(rr.x2) : sx + Number(rr.end || 0) * (this.level.speed || 300);
+                const w = Math.max(12, Math.abs(x2 - x1));
+                const cx = (x1 + x2) / 2;
+                const band = this.makeWorldRect("opponentRollBand", cx, centerY, w, rollH, cc.color(255, 210, 95), 30, 2);
+                const top = this.makeWorldRect("opponentRollTop", cx, this.rhythmOpponentYFromPlayerY(laneYs[laneYs.length - 1]), w, 5, cc.color(255, 240, 130), 92, 3);
+                const bot = this.makeWorldRect("opponentRollBottom", cx, this.rhythmOpponentYFromPlayerY(laneYs[0]), w, 5, cc.color(255, 240, 130), 92, 3);
+                (rr as any).opponentNode = band;
+                (rr as any).opponentTopNode = top;
+                (rr as any).opponentBottomNode = bot;
+            }
         }
 
         for (const note of r.notes) {
@@ -1179,6 +1198,15 @@ export default class GameMgr extends cc.Component {
                     opponentNode.scale = 1;
                 }
             }
+            const rolls: any[] = (this.level.rhythm as any).rolls || [];
+            for (const rr of rolls) {
+                const band = (rr as any).opponentNode as cc.Node;
+                const top = (rr as any).opponentTopNode as cc.Node;
+                const bot = (rr as any).opponentBottomNode as cc.Node;
+                if (band && band.isValid) { band.opacity = 30; band.scaleY = 1; }
+                if (top && top.isValid) top.opacity = 92;
+                if (bot && bot.isValid) bot.opacity = 92;
+            }
         }
         this.updateRhythmHud();
     }
@@ -1288,18 +1316,24 @@ export default class GameMgr extends cc.Component {
         this.rhythmAiMiss = 0;
         this.rhythmAiRailDir = -1;
         this.rhythmAiLaneIndex = 0;
+        this.rhythmAiRollIndex = 0;
+        this.rhythmAiRollNextTap = 0;
+        this.rhythmAiRollFlipSide = false;
         if (resetNode && this.isRhythmAiBattle()) {
             this.spawnRhythmAi();
             if (this.rhythmAiNode && this.level) {
                 const r = this.level.rhythm;
                 let y = this.level.start.y;
-                if (r && r.enabled && r.style === "jump-flip") y = (r.floorY || -240) + 18;
+                if (r && r.enabled && r.style === "jump-flip") {
+                    const ys = r.laneYs && r.laneYs.length ? r.laneYs : [(r.floorY || -240) + 18, (r.ceilingY || 240) - 18];
+                    y = ys[Math.max(0, Math.min(ys.length - 1, r.startLane || 0))];
+                }
                 if (r && r.enabled && r.style === "gravity-collect") {
                     const ys = r.laneYs && r.laneYs.length ? r.laneYs : [-212, -106, 0, 106, 212];
                     y = ys[Math.max(0, Math.min(ys.length - 1, r.startLane || 0))];
                 }
                 if (this.rhythmSplitBattle) y = this.rhythmOpponentYFromPlayerY(y);
-                this.rhythmAiNode.setPosition(this.level.start.x - 72, y);
+                this.rhythmAiNode.setPosition(this.level.start.x, y);
                 this.rhythmAiNode.scaleX = 1;
                 this.rhythmAiNode.scaleY = 1;
                 this.rhythmAiNode.active = true;
@@ -1330,40 +1364,82 @@ export default class GameMgr extends cc.Component {
         return x - Math.floor(x);
     }
 
+    private rhythmAiSkill(): number {
+        const judged = this.rhythmPerfect + this.rhythmGood + this.rhythmBad + this.rhythmMiss;
+        const acc = judged > 0
+            ? (this.rhythmPerfect + this.rhythmGood * 0.72 + this.rhythmBad * 0.35) / judged
+            : 0.58;
+        let skill = 0.34 + acc * 0.46;
+        if (this.rhythmCombo >= 25) skill += 0.07;
+        else if (this.rhythmCombo >= 10) skill += 0.04;
+        if (this.rhythmMiss > this.rhythmPerfect + this.rhythmGood) skill -= 0.08;
+
+        // Rubber-band the AI so it feels like a rival instead of a perfect bot.
+        // If the AI is far ahead it intentionally becomes sloppier; if it is far
+        // behind it becomes slightly sharper.
+        const lead = this.rhythmAiScore - this.rhythmScore;
+        if (lead > 80000) skill -= 0.18;
+        else if (lead > 35000) skill -= 0.10;
+        else if (lead < -50000) skill += 0.08;
+
+        return Math.max(0.25, Math.min(0.88, skill));
+    }
+
     private rhythmAiJudge(i: number): string {
-        const r = this.rhythmAiRand(i);
-        // Strong, but intentionally beatable: roughly 58/27/10/5.
-        if (r < 0.58) return "perfect";
-        if (r < 0.85) return "good";
-        if (r < 0.95) return "bad";
-        return "miss";
+        const skill = this.rhythmAiSkill();
+        const r = this.rhythmAiRand(i + Math.floor(this.rhythmScore / 7000) * 13 + this.rhythmMiss * 31);
+        const missRate = Math.max(0.07, 0.34 - skill * 0.24);
+        const badRate = Math.max(0.08, 0.30 - skill * 0.18);
+        const goodRate = Math.max(0.16, 0.42 - skill * 0.16);
+        if (r < missRate) return "miss";
+        if (r < missRate + badRate) return "bad";
+        if (r < missRate + badRate + goodRate) return "good";
+        return "perfect";
+    }
+
+    private rhythmOpponentNoteY(note: any): number {
+        if (!this.rhythmSplitBattle) return Number(note.y) || 0;
+        return this.rhythmOpponentYFromPlayerY(Number(note.y) || 0);
+    }
+
+    private rhythmOpponentLaneY(note: any): number {
+        if (!this.level || !this.level.rhythm) return this.rhythmOpponentNoteY(note);
+        const r = this.level.rhythm;
+        const ys = r.laneYs && r.laneYs.length ? r.laneYs : [r.floorY + 18, r.ceilingY - 18];
+        const idx = Math.max(0, Math.min(ys.length - 1, Number(note.trackLane) || 0));
+        const y = ys[idx];
+        return this.rhythmSplitBattle ? this.rhythmOpponentYFromPlayerY(y) : y;
     }
 
     private moveRhythmAiForNote(note: any) {
         if (!this.rhythmAiNode || !this.rhythmAiNode.isValid || !this.level || !this.level.rhythm) return;
         const r = this.level.rhythm;
+        const noteY = this.rhythmOpponentNoteY(note);
+        const laneY = this.rhythmOpponentLaneY(note);
+        if (Number.isFinite(Number(note.x))) this.rhythmAiNode.x = Number(note.x);
+
         if (r.style === "gravity-collect") {
-            const ys = r.laneYs && r.laneYs.length ? r.laneYs : [-212, -106, 0, 106, 212];
-            this.rhythmAiLaneIndex = Math.max(0, Math.min(ys.length - 1, note.trackLane || 0));
-            const targetY = this.rhythmSplitBattle ? this.rhythmOpponentYFromPlayerY(ys[this.rhythmAiLaneIndex]) : ys[this.rhythmAiLaneIndex];
-            cc.tween(this.rhythmAiNode).to(0.07, { y: targetY }, { easing: "sineOut" }).start();
+            this.rhythmAiLaneIndex = Math.max(0, Math.min((r.laneYs || []).length - 1, Number(note.trackLane) || 0));
+            this.rhythmAiNode.stopAllActions();
+            cc.tween(this.rhythmAiNode).to(0.07, { y: noteY }, { easing: "sineOut" }).start();
             return;
         }
+
         if (r.style === "jump-flip") {
-            if ((note.action || "") === "flip") this.rhythmAiRailDir *= -1;
-            const playerRailY = this.rhythmAiRailDir > 0 ? ((r.ceilingY || 240) - 18) : ((r.floorY || -240) + 18);
-            const railY = this.rhythmSplitBattle ? this.rhythmOpponentYFromPlayerY(playerRailY) : playerRailY;
+            this.rhythmAiRailDir = (note.lane === "ceiling" || Number(note.trackLane) === 1) ? 1 : -1;
             this.rhythmAiNode.scaleY = this.rhythmAiRailDir > 0 ? -1 : 1;
+            this.rhythmAiNode.stopAllActions();
             if ((note.action || "") === "jump") {
-                const peak = railY - this.rhythmAiRailDir * (r.jumpHeight || 62);
-                this.rhythmAiNode.stopAllActions();
+                this.rhythmAiNode.y = laneY;
                 cc.tween(this.rhythmAiNode)
-                    .to(0.035, { y: peak }, { easing: "sineOut" })
-                    .to(0.065, { y: railY }, { easing: "sineIn" })
+                    .to(0.035, { y: noteY, scaleX: 0.88 }, { easing: "sineOut" })
+                    .to(0.085, { y: laneY, scaleX: 1 }, { easing: "sineIn" })
                     .start();
             } else {
-                this.rhythmAiNode.stopAllActions();
-                cc.tween(this.rhythmAiNode).to(0.08, { y: railY, angle: this.rhythmAiNode.angle + 120 }, { easing: "sineOut" }).start();
+                this.rhythmAiNode.y = noteY;
+                cc.tween(this.rhythmAiNode)
+                    .to(0.08, { angle: this.rhythmAiNode.angle + 120 }, { easing: "sineOut" })
+                    .start();
             }
         }
     }
@@ -1393,7 +1469,66 @@ export default class GameMgr extends cc.Component {
             opponentNode.scale = judgement === "miss" ? 0.75 : 1.18;
             cc.tween(opponentNode).to(0.12, { scale: 1 }).start();
         }
-        if (judgement !== "miss") this.moveRhythmAiForNote(note);
+        if (judgement !== "miss") {
+            this.moveRhythmAiForNote(note);
+            const y = this.rhythmOpponentNoteY(note);
+            const x = Number.isFinite(Number(note.x)) ? Number(note.x) : (this.rhythmAiNode ? this.rhythmAiNode.x : 0);
+            Fx.popup(this.world, x, y + 28, judgement.toUpperCase(), judgement === "perfect" ? cc.color(255, 240, 150) : cc.color(127, 247, 255));
+        }
+        this.updateRhythmAiHud();
+    }
+
+    private updateRhythmAiRoll(t: number) {
+        if (!this.isRhythmAiBattle() || !this.isJumpFlipRhythm() || !this.level || !this.level.rhythm) return;
+        const rolls: any[] = (this.level.rhythm as any).rolls || [];
+        if (!rolls.length) return;
+        const skill = this.rhythmAiSkill();
+        const interval = Math.max(0.10, Math.min(0.24, 0.25 - skill * 0.16));
+
+        while (this.rhythmAiRollIndex < rolls.length) {
+            const rr = rolls[this.rhythmAiRollIndex];
+            const start = Number(rr.start) || 0;
+            const end = Number(rr.end) || 0;
+            if (t < start) break;
+            if (t > end) {
+                const band = (rr as any).opponentNode as cc.Node;
+                if (band && band.isValid) band.opacity = 16;
+                this.rhythmAiRollIndex++;
+                this.rhythmAiRollNextTap = 0;
+                continue;
+            }
+            if (this.rhythmAiRollNextTap <= 0) this.rhythmAiRollNextTap = start;
+            while (t >= this.rhythmAiRollNextTap && this.rhythmAiRollNextTap <= end) {
+                const seed = this.rhythmAiRollIndex * 1000 + Math.round(this.rhythmAiRollNextTap * 100);
+                const hit = this.rhythmAiRand(seed) < Math.max(0.35, Math.min(0.92, skill + 0.10));
+                const x1 = Number.isFinite(Number(rr.x1)) ? Number(rr.x1) : this.level.start.x + start * (this.level.speed || 300);
+                const x2 = Number.isFinite(Number(rr.x2)) ? Number(rr.x2) : this.level.start.x + end * (this.level.speed || 300);
+                const span = Math.max(0.001, end - start);
+                const x = x1 + (x2 - x1) * ((this.rhythmAiRollNextTap - start) / span);
+                if (hit) {
+                    this.rhythmAiScore += 100;
+                    const laneYs = this.level.rhythm.laneYs && this.level.rhythm.laneYs.length ? this.level.rhythm.laneYs : [this.level.rhythm.floorY + 18, this.level.rhythm.ceilingY - 18];
+                    const baseLane = this.rhythmAiRollFlipSide ? laneYs[laneYs.length - 1] : laneYs[0];
+                    const y = this.rhythmSplitBattle ? this.rhythmOpponentYFromPlayerY(baseLane) : baseLane;
+                    this.rhythmAiRollFlipSide = !this.rhythmAiRollFlipSide;
+                    if (this.rhythmAiNode && this.rhythmAiNode.isValid) {
+                        this.rhythmAiNode.stopAllActions();
+                        this.rhythmAiNode.setPosition(x, y);
+                        this.rhythmAiNode.scaleY = this.rhythmAiRollFlipSide ? -1 : 1;
+                        cc.tween(this.rhythmAiNode).to(0.045, { angle: this.rhythmAiNode.angle + 95 }, { easing: "sineOut" }).start();
+                    }
+                    const band = (rr as any).opponentNode as cc.Node;
+                    if (band && band.isValid) {
+                        band.opacity = 58;
+                        band.stopAllActions();
+                        cc.tween(band).to(0.05, { scaleY: 1.08 }).to(0.08, { scaleY: 1 }).start();
+                    }
+                    Fx.popup(this.world, x, y + 34, "+100", cc.color(255, 240, 130));
+                }
+                this.rhythmAiRollNextTap += interval;
+            }
+            break;
+        }
         this.updateRhythmAiHud();
     }
 
@@ -1404,7 +1539,7 @@ export default class GameMgr extends cc.Component {
         const t = Sfx.getMusicTime();
         const lead = this.players[0];
         if (this.rhythmAiNode && lead && lead.node && lead.node.isValid) {
-            const targetX = lead.node.x - 78;
+            const targetX = lead.node.x;
             const k = Math.min(1, 8 * dt);
             this.rhythmAiNode.x += (targetX - this.rhythmAiNode.x) * k;
         }
@@ -1417,6 +1552,7 @@ export default class GameMgr extends cc.Component {
             this.applyRhythmAiJudgement(n, judgement, idx);
             this.rhythmAiIndex++;
         }
+        this.updateRhythmAiRoll(t);
     }
 
     private advanceRhythmIndex() {
