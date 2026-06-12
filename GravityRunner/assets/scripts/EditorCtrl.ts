@@ -17,6 +17,7 @@ const HINT_BOTTOM = -280;  // world-y below this = hint bar zone
 export default class EditorCtrl extends cc.Component {
 
     private frames: { [k: string]: cc.SpriteFrame } = {};
+    private pixelFont: cc.BitmapFont = null;
     private cameraNode: cc.Node = null;
     private world: cc.Node = null;
     private ui: cc.Node = null;
@@ -48,7 +49,13 @@ export default class EditorCtrl extends cc.Component {
                 return;
             }
             for (const a of assets) this.frames[a.name] = a;
-            this.start2();
+            cc.resources.load("textures/pixelText", cc.BitmapFont, (fontErr, font: cc.BitmapFont) => {
+                if (!fontErr && font) {
+                    this.pixelFont = font;
+                    Fx.setPixelFont(font);
+                }
+                this.start2();
+            });
         });
     }
 
@@ -195,6 +202,7 @@ export default class EditorCtrl extends cc.Component {
         title.color = orange;
         const tl = title.addComponent(cc.Label);
         tl.string = "MAP SLOTS";
+        if (this.pixelFont) tl.font = this.pixelFont;
         tl.fontSize = 24;
         tl.lineHeight = 28;
         panel.addChild(title);
@@ -204,6 +212,7 @@ export default class EditorCtrl extends cc.Component {
         note.color = dim;
         const nl = note.addComponent(cc.Label);
         nl.string = "choose a slot, then save or load it into the editor";
+        if (this.pixelFont) nl.font = this.pixelFont;
         nl.fontSize = 13;
         nl.lineHeight = 16;
         panel.addChild(note);
@@ -303,6 +312,7 @@ export default class EditorCtrl extends cc.Component {
         const lbn = new cc.Node("l");
         const lb = lbn.addComponent(cc.Label);
         lb.string = text;
+        if (this.pixelFont) lb.font = this.pixelFont;
         lb.fontSize = 13;
         lb.lineHeight = 15;
         btn.addChild(lbn);
@@ -402,6 +412,7 @@ export default class EditorCtrl extends cc.Component {
         tn.setPosition(-395, -104);
         tn.color = cc.color(127, 247, 255);
         this.toolLabel = tn.addComponent(cc.Label);
+        if (this.pixelFont) this.toolLabel.font = this.pixelFont;
         this.toolLabel.fontSize = 14;
         this.toolLabel.lineHeight = 16;
         this.toolbar.addChild(tn);
@@ -418,6 +429,7 @@ export default class EditorCtrl extends cc.Component {
         hn.setPosition(-120, -320 + 22);
         hn.color = cc.color(180, 190, 220);
         this.hintLabel = hn.addComponent(cc.Label);
+        if (this.pixelFont) this.hintLabel.font = this.pixelFont;
         this.hintLabel.fontSize = 14;
         this.hintLabel.lineHeight = 16;
         this.ui.addChild(hn);
@@ -426,6 +438,7 @@ export default class EditorCtrl extends cc.Component {
         pn.setPosition(330, -320 + 22);
         pn.color = cc.color(255, 181, 74);
         this.posLabel = pn.addComponent(cc.Label);
+        if (this.pixelFont) this.posLabel.font = this.pixelFont;
         this.posLabel.fontSize = 14;
         this.posLabel.lineHeight = 16;
         this.ui.addChild(pn);

@@ -13,6 +13,7 @@ const { ccclass } = cc._decorator;
 export default class MenuCtrl extends cc.Component {
 
     private frames: { [k: string]: cc.SpriteFrame } = {};
+    private pixelFont: cc.BitmapFont = null;
     private bgNode: cc.Node = null;
     private modeButtons: cc.Node[] = [];
     private hintLabel: cc.Node = null;
@@ -44,6 +45,7 @@ export default class MenuCtrl extends cc.Component {
     private gatePassed = false;
     private readonly gateKey = "gfr_auth_gate";
     private authOverlay: HTMLElement = null;
+    private authInputs: HTMLInputElement[] = [];
     private roomCodeInput: HTMLInputElement = null;
     private rhythmSongs: any[] = [
         {
@@ -101,12 +103,18 @@ export default class MenuCtrl extends cc.Component {
                 return;
             }
             for (const a of assets) this.frames[a.name] = a;
-            cc.resources.load("rhythm_catalog", cc.JsonAsset, (catErr, cat: cc.JsonAsset) => {
-                if (!catErr && cat && cat.json && Array.isArray((cat.json as any).songs)) {
-                    this.rhythmSongs = (cat.json as any).songs;
-                    this.rhythmSongPage = 0;
+            cc.resources.load("textures/pixelText", cc.BitmapFont, (fontErr, font: cc.BitmapFont) => {
+                if (!fontErr && font) {
+                    this.pixelFont = font;
+                    Fx.setPixelFont(font);
                 }
-                this.buildUi();
+                cc.resources.load("rhythm_catalog", cc.JsonAsset, (catErr, cat: cc.JsonAsset) => {
+                    if (!catErr && cat && cat.json && Array.isArray((cat.json as any).songs)) {
+                        this.rhythmSongs = (cat.json as any).songs;
+                        this.rhythmSongPage = 0;
+                    }
+                    this.buildUi();
+                });
             });
         });
         cc.director.preloadScene(this.isStartScene() ? "Menu" : "Game");
@@ -117,6 +125,7 @@ export default class MenuCtrl extends cc.Component {
         cc.systemEvent.off(cc.SystemEvent.EventType.KEY_DOWN, this.onKeyDown, this);
         Fb.onChanged = null;
         this.removeAuthOverlay();
+        this.removeAuthInputs();
         this.removeRoomCodeInput();
     }
 
@@ -139,6 +148,7 @@ export default class MenuCtrl extends cc.Component {
         n.color = color;
         const lb = n.addComponent(cc.Label);
         lb.string = text;
+        if (this.pixelFont) lb.font = this.pixelFont;
         lb.fontSize = size;
         lb.lineHeight = size + 6;
         parent.addChild(n);
@@ -444,6 +454,8 @@ export default class MenuCtrl extends cc.Component {
     }
 
     private openAuthOverlay(mode: string) {
+        this.buildAuthForm(mode);
+        return;
         if (!cc.sys.isBrowser || typeof document === "undefined") {
             this.buildAuthForm(mode);
             return;
@@ -604,6 +616,56 @@ export default class MenuCtrl extends cc.Component {
         this.authOverlay = null;
     }
 
+    private removeAuthInputs() {
+        for (let i = 0; i < this.authInputs.length; i++) {
+            const input = this.authInputs[i];
+            if (input && input.parentNode) input.parentNode.removeChild(input);
+        }
+        this.authInputs = [];
+    }
+
+    private placeDomInput(input: HTMLInputElement, x: number, y: number, w: number, h: number) {
+        const canvas = cc.game.canvas as HTMLCanvasElement;
+        if (!canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        const sx = rect.width / cc.winSize.width;
+        const sy = rect.height / cc.winSize.height;
+        const left = rect.left + rect.width / 2 + (x - w / 2) * sx;
+        const yOffset = input.getAttribute("data-gfr-auth") === "1" ? -17 : 0;
+        const top = rect.top + rect.height / 2 - (y + h / 2 + yOffset) * sy;
+        input.style.left = Math.round(left) + "px";
+        input.style.top = Math.round(top) + "px";
+        input.style.width = Math.round(w * sx) + "px";
+        input.style.height = Math.round(h * sy) + "px";
+    }
+
+    private createAuthInput(x: number, y: number, w: number, h: number, placeholder: string, type: string): HTMLInputElement {
+        if (!cc.sys.isBrowser || typeof document === "undefined") return null;
+        const input = document.createElement("input");
+        input.type = type;
+        input.setAttribute("data-gfr-auth", "1");
+        input.placeholder = placeholder;
+        input.maxLength = 60;
+        input.style.cssText = [
+            "position:fixed",
+            "box-sizing:border-box",
+            "padding:0 16px",
+            "background:transparent",
+            "border:0",
+            "outline:none",
+            "color:#081024",
+            "font-family:monospace",
+            "font-size:20px",
+            "line-height:" + h + "px",
+            "z-index:9998"
+        ].join(";");
+        document.body.appendChild(input);
+        this.authInputs.push(input);
+        this.placeDomInput(input, x, y, w, h);
+        window.setTimeout(() => this.placeDomInput(input, x, y, w, h), 0);
+        return input;
+    }
+
     private removeRoomCodeInput() {
         if (this.roomCodeInput && this.roomCodeInput.parentNode) {
             this.roomCodeInput.parentNode.removeChild(this.roomCodeInput);
@@ -612,21 +674,7 @@ export default class MenuCtrl extends cc.Component {
     }
 
     private placeRoomCodeInput(input: HTMLInputElement) {
-        const canvas = cc.game.canvas as HTMLCanvasElement;
-        if (!canvas) return;
-        const rect = canvas.getBoundingClientRect();
-        const x = -40;
-        const y = -40;
-        const w = 220;
-        const h = 44;
-        const sx = rect.width / cc.winSize.width;
-        const sy = rect.height / cc.winSize.height;
-        const left = rect.left + rect.width / 2 + (x - w / 2) * sx;
-        const top = rect.top + rect.height / 2 - (y + h / 2) * sy;
-        input.style.left = Math.round(left) + "px";
-        input.style.top = Math.round(top) + "px";
-        input.style.width = Math.round(w * sx) + "px";
-        input.style.height = Math.round(h * sy) + "px";
+        this.placeDomInput(input, -40, -40, 220, 44);
     }
 
     private createRoomCodeInput(status?: cc.Label) {
@@ -684,10 +732,12 @@ export default class MenuCtrl extends cc.Component {
         this.label(panel, registering ? "Create a Firebase account." : "Load your Firebase progress.", 0, 92, 15, dim);
         this.label(panel, "EMAIL", -188, 66, 13, cc.color(150, 165, 220), 0);
         this.authFieldBg(panel, 0, 40, 384, 34);
-        const email = this.authEditBox(panel, 0, 40, 360, "email", false);
+        const emailDom = this.createAuthInput(0, 40, 384, 34, "email", "email");
+        const email = emailDom ? null : this.authEditBox(panel, 0, 40, 360, "email", false);
         this.label(panel, "PASSWORD", -188, 8, 13, cc.color(150, 165, 220), 0);
         this.authFieldBg(panel, 0, -18, 384, 34);
-        const pw = this.authEditBox(panel, 0, -18, 360, "password (6+ chars)", true);
+        const pwDom = this.createAuthInput(0, -18, 384, 34, "password", "text");
+        const pw = pwDom ? null : this.authEditBox(panel, 0, -18, 360, "password", true);
         this.accountStatus = this.label(panel, "", 0, -126, 15, orange);
         const status = (s: string) => {
             if (this.accountStatus && this.accountStatus.isValid) {
@@ -695,8 +745,8 @@ export default class MenuCtrl extends cc.Component {
             }
         };
         const submit = () => {
-            const em = email.value().trim();
-            const pp = pw.value();
+            const em = (emailDom ? emailDom.value : email.value()).trim();
+            const pp = pwDom ? pwDom.value : pw.value();
             if (!em || !pp) return status("enter email and password");
             status(registering ? "creating account..." : "logging in...");
             if (registering) {
@@ -712,25 +762,45 @@ export default class MenuCtrl extends cc.Component {
                 this.gatePassed = true;
                 this.saveGate();
                 status(registering ? "saved to Firebase. loading..." : "loading your progress...");
-                this.scheduleOnce(() => this.rebuildUi(), 0.15);
+                if (this.isStartScene()) {
+                    this.scheduleOnce(() => Fx.fadeTo("Menu", this.node), 0.15);
+                } else {
+                    this.scheduleOnce(() => this.rebuildUi(), 0.15);
+                }
             });
         };
-        email.box.returnType = cc.EditBox.KeyboardReturnType.NEXT;
-        pw.box.returnType = cc.EditBox.KeyboardReturnType.DONE;
-        email.box.node.on("text-changed", () => {
-            if (email.value().indexOf("\n") < 0 && email.value().indexOf("\r") < 0) return;
-            email.setValue(email.value().replace(/[\r\n]/g, ""));
-            this.scheduleOnce(() => pw.focus(), 0);
-        });
-        pw.box.node.on("text-changed", () => {
-            if (pw.value().indexOf("\n") < 0 && pw.value().indexOf("\r") < 0) return;
-            pw.setValue(pw.value().replace(/[\r\n]/g, ""));
-            this.scheduleOnce(submit, 0);
-        });
-        email.box.node.on("editing-return", () => {
-            this.scheduleOnce(() => pw.focus(), 0);
-        });
-        pw.box.node.on("editing-return", submit);
+        if (emailDom && pwDom) {
+            emailDom.addEventListener("keydown", (e: KeyboardEvent) => {
+                if (e.key === "Enter") {
+                    e.preventDefault();
+                    pwDom.focus();
+                }
+            });
+            pwDom.addEventListener("keydown", (e: KeyboardEvent) => {
+                if (e.key === "Enter") {
+                    e.preventDefault();
+                    submit();
+                }
+            });
+            window.setTimeout(() => emailDom.focus(), 50);
+        } else {
+            email.box.returnType = cc.EditBox.KeyboardReturnType.NEXT;
+            pw.box.returnType = cc.EditBox.KeyboardReturnType.DONE;
+            email.box.node.on("text-changed", () => {
+                if (email.value().indexOf("\n") < 0 && email.value().indexOf("\r") < 0) return;
+                email.setValue(email.value().replace(/[\r\n]/g, ""));
+                this.scheduleOnce(() => pw.focus(), 0);
+            });
+            pw.box.node.on("text-changed", () => {
+                if (pw.value().indexOf("\n") < 0 && pw.value().indexOf("\r") < 0) return;
+                pw.setValue(pw.value().replace(/[\r\n]/g, ""));
+                this.scheduleOnce(submit, 0);
+            });
+            email.box.node.on("editing-return", () => {
+                this.scheduleOnce(() => pw.focus(), 0);
+            });
+            pw.box.node.on("editing-return", submit);
+        }
 
         const submitBtn = this.sprite(panel, "white", -92, -78, 170, 42,
             registering ? cc.color(40, 30, 70) : cc.color(20, 70, 40));
@@ -773,43 +843,13 @@ export default class MenuCtrl extends cc.Component {
         eb.placeholderFontSize = 16;
         eb.fontColor = cc.color(8, 16, 36);
         eb.placeholderFontColor = cc.color(45, 72, 104);
-        if (password) eb.inputFlag = cc.EditBox.InputFlag.PASSWORD;
         parent.addChild(n);
-
-        const mirrorNode = this.label(parent, "", x - w / 2 + 10, y, 18, cc.color(8, 16, 36), 0);
-        mirrorNode.zIndex = 8;
-        const mirror = mirrorNode.getComponent(cc.Label);
-        mirror.fontSize = 18;
-        mirror.lineHeight = 30;
-        mirrorNode.opacity = 0;
-        let editing = false;
-        const sync = () => {
-            const raw = eb.string || "";
-            mirror.string = password ? raw.replace(/./g, "*") : raw;
-            mirrorNode.opacity = raw && !editing ? 255 : 0;
-        };
-        eb.node.on("text-changed", sync);
-        eb.node.on("editing-did-began", () => {
-            editing = true;
-            mirrorNode.opacity = 0;
-        });
-        // eb.node.on("editing-did-ended", () => {
-        //     editing = false;
-        //     sync();
-        // });
-        eb.node.on("editing-did-ended", () => {
-            this.scheduleOnce(() => {
-                eb.node.active = false;
-                eb.node.active = true;
-            }, 0);
-        });
 
         return {
             box: eb,
             value: () => eb.string || "",
             setValue: (s: string) => {
                 eb.string = s;
-                sync();
             },
             focus: () => eb.focus()
         };
@@ -1157,7 +1197,11 @@ export default class MenuCtrl extends cc.Component {
 
     private closePanels() {
         if (this.settingsPanel) { this.settingsPanel.destroy(); this.settingsPanel = null; }
-        if (this.accountPanel) { this.accountPanel.destroy(); this.accountPanel = null; }
+        if (this.accountPanel) {
+            this.removeAuthInputs();
+            this.accountPanel.destroy();
+            this.accountPanel = null;
+        }
         if (this.boardPanel) { this.boardPanel.destroy(); this.boardPanel = null; }
         if (this.savesPanel) { this.savesPanel.destroy(); this.savesPanel = null; }
         if (this.helpPanel) { this.helpPanel.destroy(); this.helpPanel = null; }
@@ -1454,6 +1498,7 @@ export default class MenuCtrl extends cc.Component {
             ln.color = color;
             const lb = ln.addComponent(cc.Label);
             lb.string = "";
+            if (this.pixelFont) lb.font = this.pixelFont;
             lb.fontSize = 18;
             lb.lineHeight = h;
             lb.horizontalAlign = cc.Label.HorizontalAlign.LEFT;

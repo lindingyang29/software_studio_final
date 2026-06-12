@@ -8,10 +8,15 @@
 
 export default class Fx {
     private static frame: cc.SpriteFrame = null;
+    private static pixelFont: cc.BitmapFont = null;
     private static fading = false;
 
     static setFrame(f: cc.SpriteFrame) {
         Fx.frame = f;
+    }
+
+    static setPixelFont(f: cc.BitmapFont) {
+        Fx.pixelFont = f;
     }
 
     static isFading(): boolean {
@@ -302,6 +307,7 @@ export default class Fx {
         const n = new cc.Node("popup");
         const l = n.addComponent(cc.Label);
         l.string = text;
+        if (Fx.pixelFont) l.font = Fx.pixelFont;
         l.fontSize = 24;
         l.lineHeight = 26;
         n.color = color;

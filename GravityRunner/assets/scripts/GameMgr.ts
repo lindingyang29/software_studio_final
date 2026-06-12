@@ -30,6 +30,7 @@ export default class GameMgr extends cc.Component {
     private players: Player[] = [];
     private level: LevelData = null;
     private frames: { [k: string]: cc.SpriteFrame } = {};
+    private pixelFont: cc.BitmapFont = null;
 
     private state: GameState = "loading";
     private time = 0;
@@ -138,7 +139,13 @@ export default class GameMgr extends cc.Component {
                 return;
             }
             for (const a of assets) this.frames[a.name] = a;
-            this.onTexturesReady();
+            cc.resources.load("textures/pixelText", cc.BitmapFont, (fontErr, font: cc.BitmapFont) => {
+                if (!fontErr && font) {
+                    this.pixelFont = font;
+                    Fx.setPixelFont(font);
+                }
+                this.onTexturesReady();
+            });
         });
     }
 
@@ -591,6 +598,7 @@ export default class GameMgr extends cc.Component {
                 ln.setPosition(0, 34);
                 ln.color = cc.color(255, 181, 74);
                 const lb = ln.addComponent(cc.Label);
+                if (this.pixelFont) lb.font = this.pixelFont;
                 lb.string = d.n || "ghost";
                 lb.fontSize = 12;
                 lb.lineHeight = 14;
@@ -769,6 +777,7 @@ export default class GameMgr extends cc.Component {
         n.anchorX = anchorX;
         n.color = color;
         const lb = n.addComponent(cc.Label);
+        if (this.pixelFont) lb.font = this.pixelFont;
         lb.fontSize = size;
         lb.lineHeight = size + 6;
         lb.string = "";
@@ -1269,6 +1278,7 @@ export default class GameMgr extends cc.Component {
         name.setPosition(0, 34);
         name.color = cc.color(255, 230, 150);
         const lb = name.addComponent(cc.Label);
+        if (this.pixelFont) lb.font = this.pixelFont;
         lb.string = "AI";
         lb.fontSize = 12;
         lb.lineHeight = 14;
