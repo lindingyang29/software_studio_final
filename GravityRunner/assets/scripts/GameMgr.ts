@@ -320,6 +320,7 @@ export default class GameMgr extends cc.Component {
         const hudLimit = this.shouldSplitRhythmBattle() ? 50 : 72;
         if (hudTitle.length > hudLimit) hudTitle = hudTitle.substr(0, hudLimit - 1) + "…";
         this.nameLabel.string = hudTitle;
+        Fx.applyFont(this.nameLabel, hudTitle); // Japanese song names need the system font
         if (this.isRhythmLevel()) {
             Sfx.stopBgm();
             this.resetRhythmState(true);
@@ -1096,8 +1097,8 @@ export default class GameMgr extends cc.Component {
                 ln.setPosition(0, 34);
                 ln.color = cc.color(255, 181, 74);
                 const lb = ln.addComponent(cc.Label);
-                if (this.pixelFont) lb.font = this.pixelFont;
                 lb.string = d.n || "ghost";
+                Fx.applyFont(lb, lb.string);
                 lb.fontSize = 12;
                 lb.lineHeight = 14;
                 n.addChild(ln);

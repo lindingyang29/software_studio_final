@@ -148,7 +148,7 @@ export default class MenuCtrl extends cc.Component {
         n.color = color;
         const lb = n.addComponent(cc.Label);
         lb.string = text;
-        if (this.pixelFont) lb.font = this.pixelFont;
+        Fx.applyFont(lb, text); // non-ASCII (Japanese titles) -> system font
         lb.fontSize = size;
         lb.lineHeight = size + 6;
         parent.addChild(n);

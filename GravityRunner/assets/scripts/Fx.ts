@@ -19,6 +19,19 @@ export default class Fx {
         Fx.pixelFont = f;
     }
 
+    // The pixel bitmap font only contains ASCII glyphs. Apply it only when
+    // the text is pure ASCII; otherwise fall back to the system font so
+    // CJK / kana (e.g. Japanese song titles) still render.
+    static applyFont(lb: cc.Label, text: string) {
+        if (!lb) return;
+        const t = text || "";
+        let ascii = true;
+        for (let i = 0; i < t.length; i++) {
+            if (t.charCodeAt(i) > 126) { ascii = false; break; }
+        }
+        lb.font = (ascii && Fx.pixelFont) ? Fx.pixelFont : null;
+    }
+
     static isFading(): boolean {
         return Fx.fading;
     }
@@ -307,7 +320,7 @@ export default class Fx {
         const n = new cc.Node("popup");
         const l = n.addComponent(cc.Label);
         l.string = text;
-        if (Fx.pixelFont) l.font = Fx.pixelFont;
+        Fx.applyFont(l, text);
         l.fontSize = 24;
         l.lineHeight = 26;
         n.color = color;
