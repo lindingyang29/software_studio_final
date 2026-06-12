@@ -1014,7 +1014,7 @@ export default class GameMgr extends cc.Component {
 
     private applyRhythmHudLayout() {
         const split = this.rhythmSplitBattle && this.isRhythmLevel();
-        if (this.rhythmLabel) this.rhythmLabel.node.setPosition(0, split ? -262 : 256);
+        if (this.rhythmLabel) this.rhythmLabel.node.setPosition(0, split ? -262 : 266);
         if (this.rhythmAiLabel) this.rhythmAiLabel.node.setPosition(0, split ? 258 : 230);
         if (this.rhythmEffectLabel) this.rhythmEffectLabel.node.setPosition(0, split ? -232 : 216);
         if (this.rhythmOpponentEffectLabel) this.rhythmOpponentEffectLabel.node.setPosition(0, split ? 228 : 198);
@@ -1027,9 +1027,11 @@ export default class GameMgr extends cc.Component {
             this.nameLabel.node.setPosition(0, 286);
             this.nameLabel.node.anchorX = 0.5;
         }
-        if (this.crystalLabel) this.crystalLabel.node.setPosition(-472, 256);
+        // second row sits at 266 so it stays on the ceiling band (y>=250)
+        // instead of straddling its lit bottom edge
+        if (this.crystalLabel) this.crystalLabel.node.setPosition(-472, 266);
         if (this.deathLabel) {
-            this.deathLabel.node.setPosition(450, 256);
+            this.deathLabel.node.setPosition(450, 266);
             this.deathLabel.node.anchorX = 1;
         }
         if (this.timeLabel) this.timeLabel.node.setPosition(450, 286);
@@ -1394,8 +1396,8 @@ export default class GameMgr extends cc.Component {
         // initial positions match applyRhythmHudLayout (title centered,
         // counters on the second row) so the first frame doesn't jump
         this.nameLabel = this.makeLabel(this.hud, 0, 286, 20, cyan, 0.5);
-        this.crystalLabel = this.makeLabel(this.hud, -472, 256, 18, white, 0);
-        this.deathLabel = this.makeLabel(this.hud, 450, 256, 18, pink, 1);
+        this.crystalLabel = this.makeLabel(this.hud, -472, 266, 18, white, 0);
+        this.deathLabel = this.makeLabel(this.hud, 450, 266, 18, pink, 1);
         this.timeLabel = this.makeLabel(this.hud, 450, 286, 22, orange, 1);
         // endless distance readout lives bottom-center, away from the top row
         this.distLabel = this.makeLabel(this.hud, 0, -286, 24, orange);
