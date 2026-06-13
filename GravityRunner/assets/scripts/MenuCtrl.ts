@@ -760,6 +760,7 @@ export default class MenuCtrl extends cc.Component {
                 GameData.setUnlocked(1);
                 GameData.setBestDist(0);
             }
+            Fb.noReloadOnNextAuthChange();
             const fn = registering ? Fb.register : Fb.login;
             fn(em, pp, (err) => {
                 if (err) {
@@ -769,6 +770,7 @@ export default class MenuCtrl extends cc.Component {
                 this.gatePassed = true;
                 this.saveGate();
                 status(registering ? "saved to Firebase. loading..." : "loading your progress...");
+                this.removeAuthInputs();
                 if (this.isStartScene()) {
                     this.scheduleOnce(() => Fx.fadeTo("Menu", this.node), 0.15);
                 } else {
@@ -1206,9 +1208,9 @@ export default class MenuCtrl extends cc.Component {
     // ---------- settings panel ----------
 
     private closePanels() {
+        this.removeAuthInputs();
         if (this.settingsPanel) { this.settingsPanel.destroy(); this.settingsPanel = null; }
         if (this.accountPanel) {
-            this.removeAuthInputs();
             this.accountPanel.destroy();
             this.accountPanel = null;
         }
